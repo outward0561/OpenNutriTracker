@@ -123,6 +123,7 @@ class _AddMealScreenState extends State<AddMealScreen> {
     ];
     final units = [for (final meal in meals) meal.isLiquid ? 'ml' : 'g'];
     var saving = false;
+    var nextIndex = 0;
     String? error;
     final route = DialogRoute<void>(
       context: context,
@@ -134,7 +135,7 @@ class _AddMealScreenState extends State<AddMealScreen> {
             child: ListView(
               shrinkWrap: true,
               children: [
-                for (var index = 0; index < meals.length; index++)
+                for (var index = nextIndex; index < meals.length; index++)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 20),
                     child: Column(
@@ -265,10 +266,12 @@ class _AddMealScreenState extends State<AddMealScreen> {
                             ),
                           )
                           .toList();
-                      if (parsed.any(
-                        (value) =>
-                            value == null || !value.isFinite || value <= 0,
-                      )) {
+                      if (parsed
+                          .skip(nextIndex)
+                          .any(
+                            (value) =>
+                                value == null || !value.isFinite || value <= 0,
+                          )) {
                         update(
                           () => error = S.of(context).enterPositiveAmountsLabel,
                         );
@@ -278,9 +281,14 @@ class _AddMealScreenState extends State<AddMealScreen> {
                         saving = true;
                         error = null;
                       });
+                      final attemptStart = nextIndex;
                       try {
                         final bloc = locator<MealDetailBloc>();
-                        for (var index = 0; index < meals.length; index++) {
+                        for (
+                          var index = nextIndex;
+                          index < meals.length;
+                          index++
+                        ) {
                           await bloc.addIntake(
                             dialogContext,
                             units[index],
@@ -293,12 +301,12 @@ class _AddMealScreenState extends State<AddMealScreen> {
                             meals[index],
                             _day,
                           );
+                          // A committed intake must not be sent again, either
+                          // in this dialog or after closing and reopening it.
+                          nextIndex = index + 1;
+                          _selectedMeals.remove(_mealKey(meals[index]));
                         }
-                        locator<DiaryBloc>().add(const LoadDiaryYearEvent());
-                        locator<CalendarDayBloc>().add(
-                          LoadCalendarDayEvent(_day),
-                        );
-                        locator<HomeBloc>().add(const LoadItemsEvent());
+                        _refreshLoggedDays(nextIndex - attemptStart, day: _day);
                         if (dialogContext.mounted) {
                           Navigator.pop(dialogContext);
                         }
@@ -309,9 +317,16 @@ class _AddMealScreenState extends State<AddMealScreen> {
                           });
                         }
                       } catch (_) {
+                        final written = nextIndex - attemptStart;
+                        if (written > 0) {
+                          _refreshLoggedDays(written, day: _day);
+                          if (mounted) setState(() {});
+                        }
                         update(() {
                           saving = false;
-                          error = S.of(context).bulkAddSearchFailedLabel;
+                          error = written > 0
+                              ? S.of(context).selectedFoodsPartialFailureLabel
+                              : S.of(context).logTrayLogFailedLabel;
                         });
                       }
                     },
@@ -425,12 +440,15 @@ class _AddMealScreenState extends State<AddMealScreen> {
               top: false,
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                child: FilledButton(
-                  onPressed: _selectedMeals.isEmpty ? null : _reviewSelected,
-                  child: Text(
-                    S
-                        .of(context)
-                        .reviewSelectedFoodsCount(_selectedMeals.length),
+                child: Semantics(
+                  identifier: 'add-meal-review-selected',
+                  child: FilledButton(
+                    onPressed: _selectedMeals.isEmpty ? null : _reviewSelected,
+                    child: Text(
+                      S
+                          .of(context)
+                          .reviewSelectedFoodsCount(_selectedMeals.length),
+                    ),
                   ),
                 ),
               ),
@@ -1365,11 +1383,13 @@ class _AddMealScreenState extends State<AddMealScreen> {
     ).popUntil(namedRouteOrFirst(NavigationOptions.mainRoute));
   }
 
-  void _refreshLoggedDays(int written) {
+  void _refreshLoggedDays(int written, {DateTime? day}) {
     if (written == 0) return;
     locator<HomeBloc>().add(const LoadItemsEvent());
     locator<DiaryBloc>().add(const LoadDiaryYearEvent());
-    locator<CalendarDayBloc>().add(const RefreshCalendarDayEvent());
+    locator<CalendarDayBloc>().add(
+      day == null ? const RefreshCalendarDayEvent() : LoadCalendarDayEvent(day),
+    );
   }
 
   Future<void> _confirmDiscardTray() async {

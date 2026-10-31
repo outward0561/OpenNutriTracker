@@ -58,26 +58,31 @@ class _DiaryTransferDialogState extends State<DiaryTransferDialog> {
           ),
           if (widget.includesFoods) ...[
             const SizedBox(height: 12),
-            DropdownButtonFormField<IntakeTypeEntity?>(
-              initialValue: _mealType,
-              decoration: InputDecoration(labelText: s.diaryTransferMealLabel),
-              items: [
-                DropdownMenuItem<IntakeTypeEntity?>(
-                  value: null,
-                  child: Text(s.diaryKeepOriginalMealsLabel),
+            Semantics(
+              identifier: 'diary-transfer-meal',
+              child: DropdownButtonFormField<IntakeTypeEntity?>(
+                initialValue: _mealType,
+                decoration: InputDecoration(
+                  labelText: s.diaryTransferMealLabel,
                 ),
-                for (final type in IntakeTypeEntity.values)
+                items: [
                   DropdownMenuItem<IntakeTypeEntity?>(
-                    value: type,
-                    child: Text(switch (type) {
-                      IntakeTypeEntity.breakfast => s.breakfastLabel,
-                      IntakeTypeEntity.lunch => s.lunchLabel,
-                      IntakeTypeEntity.dinner => s.dinnerLabel,
-                      IntakeTypeEntity.snack => s.snackLabel,
-                    }),
+                    value: null,
+                    child: Text(s.diaryKeepOriginalMealsLabel),
                   ),
-              ],
-              onChanged: (value) => setState(() => _mealType = value),
+                  for (final type in IntakeTypeEntity.values)
+                    DropdownMenuItem<IntakeTypeEntity?>(
+                      value: type,
+                      child: Text(switch (type) {
+                        IntakeTypeEntity.breakfast => s.breakfastLabel,
+                        IntakeTypeEntity.lunch => s.lunchLabel,
+                        IntakeTypeEntity.dinner => s.dinnerLabel,
+                        IntakeTypeEntity.snack => s.snackLabel,
+                      }),
+                    ),
+                ],
+                onChanged: (value) => setState(() => _mealType = value),
+              ),
             ),
           ],
         ],
@@ -92,7 +97,7 @@ class _DiaryTransferDialogState extends State<DiaryTransferDialog> {
             context,
             DiaryTransferChoice(_date, _mealType, false),
           ),
-          child: Text(s.diaryCopyLabel),
+          child: Text(s.copyActionLabel),
         ),
         FilledButton(
           onPressed: () => Navigator.pop(

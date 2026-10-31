@@ -110,6 +110,11 @@ IntakeEntity _intake(String name, {double? servingQuantity}) => IntakeEntity(
 
 class _RecordingMealDetailBloc extends Fake implements MealDetailBloc {
   final writes = <({String name, String unit, double amount})>[];
+  final attempts = <String>[];
+  final String? failOnceForName;
+  bool _failed = false;
+
+  _RecordingMealDetailBloc({this.failOnceForName});
 
   @override
   Future<void> addIntake(
@@ -120,6 +125,11 @@ class _RecordingMealDetailBloc extends Fake implements MealDetailBloc {
     MealEntity meal,
     DateTime day,
   ) async {
+    attempts.add(meal.name!);
+    if (!_failed && meal.name == failOnceForName) {
+      _failed = true;
+      throw StateError('Simulated write failure');
+    }
     writes.add((
       name: meal.name!,
       unit: unit,
@@ -320,6 +330,81 @@ void main() {
         ]);
       },
     );
+
+    testWidgets(
+      'retry after a partial multi-food write skips committed foods',
+      (tester) async {
+        await _register([_intake('Bread'), _intake('Cheese')]);
+        final saved = _RecordingMealDetailBloc(failOnceForName: 'Cheese');
+        getIt.registerSingleton<MealDetailBloc>(saved);
+        getIt.registerSingleton<DiaryBloc>(_NoopDiaryBloc());
+        getIt.registerSingleton<CalendarDayBloc>(_NoopCalendarDayBloc());
+        getIt.registerSingleton<HomeBloc>(_NoopHomeBloc());
+        await tester.pumpWidget(_app());
+        await tester.pumpAndSettle();
+        await tester.tap(_withIdentifier('add-meal-select-multiple'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byType(MealItemCard).at(0));
+        await tester.tap(find.byType(MealItemCard).at(1));
+        await tester.pumpAndSettle();
+        expect(_withIdentifier('add-meal-review-selected'), findsOneWidget);
+        await tester.tap(_withIdentifier('add-meal-review-selected'));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text(l10nEn.addSelectedFoodsLabel));
+        await tester.pumpAndSettle();
+        expect(saved.attempts, ['Bread', 'Cheese']);
+        expect(saved.writes.map((write) => write.name), ['Bread']);
+        expect(
+          find.text(l10nEn.selectedFoodsPartialFailureLabel),
+          findsOneWidget,
+        );
+        expect(
+          find.descendant(
+            of: find.byType(AlertDialog),
+            matching: find.text('Bread'),
+          ),
+          findsNothing,
+        );
+
+        await tester.tap(find.text(l10nEn.addSelectedFoodsLabel));
+        await tester.pumpAndSettle();
+        expect(saved.attempts, ['Bread', 'Cheese', 'Cheese']);
+        expect(saved.writes.map((write) => write.name), ['Bread', 'Cheese']);
+      },
+    );
+
+    testWidgets('closing a partial batch keeps only unwritten foods selected', (
+      tester,
+    ) async {
+      await _register([_intake('Bread'), _intake('Cheese')]);
+      final saved = _RecordingMealDetailBloc(failOnceForName: 'Cheese');
+      getIt.registerSingleton<MealDetailBloc>(saved);
+      getIt.registerSingleton<DiaryBloc>(_NoopDiaryBloc());
+      getIt.registerSingleton<CalendarDayBloc>(_NoopCalendarDayBloc());
+      getIt.registerSingleton<HomeBloc>(_NoopHomeBloc());
+      await tester.pumpWidget(_app());
+      await tester.pumpAndSettle();
+      await tester.tap(_withIdentifier('add-meal-select-multiple'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(MealItemCard).at(0));
+      await tester.tap(find.byType(MealItemCard).at(1));
+      await tester.pumpAndSettle();
+      await tester.tap(_withIdentifier('add-meal-review-selected'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(l10nEn.addSelectedFoodsLabel));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text(l10nEn.dialogCancelLabel));
+      await tester.pumpAndSettle();
+      expect(find.text(l10nEn.reviewSelectedFoodsCount(1)), findsOneWidget);
+      await tester.tap(_withIdentifier('add-meal-review-selected'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(l10nEn.addSelectedFoodsLabel));
+      await tester.pumpAndSettle();
+      expect(saved.attempts, ['Bread', 'Cheese', 'Cheese']);
+      expect(saved.writes.map((write) => write.name), ['Bread', 'Cheese']);
+    });
 
     testWidgets('selects multiple foods and validates every reviewed amount', (
       tester,

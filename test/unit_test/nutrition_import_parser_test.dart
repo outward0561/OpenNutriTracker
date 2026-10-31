@@ -95,6 +95,61 @@ Salt: 0.1 g
     expect(food.toPer100()['fat'], 8);
   });
 
+  test('tabular serving energy uses the selected cell, not per-100 kcal', () {
+    const label =
+        'Nutrient\tPer 100 g\tPer serving\n'
+        'Serving size: 25 g\n'
+        'Energy\t1046 kJ / 250 kcal\t261.5 kJ / 62.5 kcal\n'
+        'Protein\t12 g\t3 g';
+
+    final serving = NutritionImportParser.parseText(
+      label,
+      selectedBasis: NutritionBasis.serving,
+    );
+    expect(serving.issues, isEmpty);
+    expect(serving.values['kcal'], 62.5);
+    expect(serving.values['kj'], 261.5);
+    expect(serving.toPer100()['kcal'], 250);
+    expect(serving.toPer100()['kj'], 1046);
+    expect(serving.toPer100()['protein'], 12);
+
+    final per100 = NutritionImportParser.parseText(label);
+    expect(per100.issues, isEmpty);
+    expect(per100.toPer100()['kcal'], 250);
+    expect(per100.toPer100()['kj'], 1046);
+  });
+
+  test('tabular energy without a unique basis column stays unrecognised', () {
+    final noHeader = NutritionImportParser.parseText(
+      'Per 100 g\nEnergy\t1046 kJ / 250 kcal\t261.5 kJ / 62.5 kcal',
+    );
+    expect(noHeader.values['kcal'], isNull);
+    expect(noHeader.issues.join(' '), contains('Ambiguous columns'));
+
+    final duplicateHeader = NutritionImportParser.parseText(
+      'Nutrient\tPer 100 g\tPer 100 g\nEnergy\t250 kcal\t260 kcal',
+    );
+    expect(duplicateHeader.values['kcal'], isNull);
+    expect(duplicateHeader.issues.join(' '), contains('Ambiguous columns'));
+  });
+
+  test('energy pairs in either unit order preserve the stated kcal', () {
+    final food = NutritionImportParser.parseText(
+      'Per 100 g\nEnergy 250 kcal / 1046 kJ',
+    );
+    expect(food.values['kcal'], 250);
+    expect(food.values['kj'], 1046);
+  });
+
+  test('an invalid energy pair is not partially imported', () {
+    final food = NutritionImportParser.parseText(
+      'Per 100 g\nEnergy -1046 kJ / 250 kcal',
+    );
+    expect(food.values['kj'], isNull);
+    expect(food.values['kcal'], isNull);
+    expect(food.issues, isNotEmpty);
+  });
+
   test('serving without size cannot be converted', () {
     final food = NutritionImportParser.parseText('Per serving\nProtein 3g');
     expect(() => food.toPer100(), throwsFormatException);

@@ -37,6 +37,7 @@ void main() {
     );
     await tester.tap(find.text('Open'));
     await tester.pumpAndSettle();
+    expect(find.bySemanticsIdentifier('diary-transfer-meal'), findsOneWidget);
     await tester.tap(find.text('Lunch').last);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Dinner').last);

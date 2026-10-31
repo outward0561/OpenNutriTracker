@@ -162,6 +162,49 @@ class NutritionImportParser {
     caseSensitive: false,
   );
 
+  static String? _selectedTableCell(
+    List<String> lines,
+    int lineIndex,
+    List<String> cells,
+    NutritionBasis basis,
+    String label,
+    List<String> issues,
+  ) {
+    List<String>? headings;
+    for (var i = lineIndex - 1; i >= 0; i--) {
+      final candidate = lines[i]
+          .split('\t')
+          .map((cell) => cell.trim())
+          .toList();
+      if (candidate.length > 1 &&
+          candidate
+              .skip(1)
+              .any((cell) => _basis(cell) != NutritionBasis.unknown)) {
+        headings = candidate;
+        break;
+      }
+    }
+    if (headings == null) {
+      if (cells.length == 2) return cells[1];
+      issues.add('Ambiguous columns for $label.');
+      return null;
+    }
+    final matchingColumns = [
+      for (var i = 1; i < headings.length; i++)
+        if (_basis(headings[i]) == basis) i,
+    ];
+    if (matchingColumns.length != 1) {
+      issues.add('Ambiguous columns for $label.');
+      return null;
+    }
+    final column = matchingColumns.single;
+    if (column >= cells.length) {
+      issues.add('Cannot locate the selected column for $label.');
+      return null;
+    }
+    return cells[column];
+  }
+
   static double? parseNumber(String text) {
     final match = _number.firstMatch(text);
     if (match == null) return null;
@@ -389,7 +432,8 @@ class NutritionImportParser {
       );
     }
     var activeBasis = NutritionBasis.unknown;
-    for (final line in lines) {
+    for (var lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+      final line = lines[lineIndex];
       final lineBasis = _basis(line);
       if (!line.contains('\t') && lineBasis != NutritionBasis.unknown) {
         activeBasis = lineBasis;
@@ -411,7 +455,8 @@ class NutritionImportParser {
         entry.name = name[1]!.trim();
         continue;
       }
-      final matches = _nutrient.allMatches(line).toList();
+      final cells = line.split('\t').map((cell) => cell.trim()).toList();
+      final matches = _nutrient.allMatches(cells.first).toList();
       if (!line.contains('\t') &&
           activeBasis != NutritionBasis.unknown &&
           activeBasis != preferred) {
@@ -430,15 +475,27 @@ class NutritionImportParser {
         continue;
       }
       // A copied table may have a heading row followed by nutrient rows.
-      final cells = line.split('\t').map((c) => c.trim()).toList();
+      final selectedCell = cells.length > 1 && matches.isNotEmpty
+          ? _selectedTableCell(
+              lines,
+              lineIndex,
+              cells,
+              preferred,
+              matches.first.group(0)!,
+              entry.issues,
+            )
+          : null;
+      if (cells.length > 1 && selectedCell == null) continue;
       for (var i = 0; i < matches.length; i++) {
         final match = matches[i];
         final label = match.group(0)!;
         var field = fieldFor(label);
-        final tail = line.substring(
-          match.end,
-          i + 1 < matches.length ? matches[i + 1].start : line.length,
-        );
+        final tail = cells.length > 1
+            ? selectedCell!
+            : line.substring(
+                match.end,
+                i + 1 < matches.length ? matches[i + 1].start : line.length,
+              );
         if (field == 'kcal' &&
             RegExp(
               r'^\s*[:;]?\s*\d+(?:[.,]\d+)?\s*kj\b',
@@ -454,41 +511,43 @@ class NutritionImportParser {
             )
             .toList();
         if (candidates.isEmpty || field == null) continue;
-        var index = 0;
-        if (cells.length > 2 && matches.length == 1) {
-          // For tabular rows the column heading order is known only if it is
-          // explicit in the first rows. Never choose a numeric column blindly.
-          final header = lines
-              .takeWhile((l) => l != line)
-              .firstWhere(
-                (l) => l.contains('\t') && _basis(l) != NutritionBasis.unknown,
-                orElse: () => '',
-              );
-          if (header.isNotEmpty) {
-            final headers = header.split('\t');
-            index = headers.indexWhere((h) => _basis(h) == preferred) - 1;
-          } else if (candidates.length > 1) {
-            entry.issues.add('Ambiguous columns for $label.');
-            continue;
-          }
-          if (index < 0 || index >= candidates.length) {
-            entry.issues.add('Cannot locate the selected column for $label.');
+        if (candidates.length > 1 && (field == 'kcal' || field == 'kj')) {
+          final energyValues = RegExp(
+            r'(-?\d+(?:[.,]\d+)?)\s*(kcal|kj)\b',
+            caseSensitive: false,
+          ).allMatches(tail).toList();
+          if (energyValues.length == 2 &&
+              candidates.length == 2 &&
+              energyValues[0][2]!.toLowerCase() !=
+                  energyValues[1][2]!.toLowerCase()) {
+            final values = [
+              for (final energy in energyValues)
+                double.tryParse(energy[1]!.replaceAll(',', '.')),
+            ];
+            if (values.any(
+              (value) => value == null || !value.isFinite || value < 0,
+            )) {
+              entry.issues.add('Invalid value for $label.');
+              continue;
+            }
+            for (
+              var energyIndex = 0;
+              energyIndex < energyValues.length;
+              energyIndex++
+            ) {
+              entry.values[energyValues[energyIndex][2]!.toLowerCase()] =
+                  values[energyIndex];
+            }
             continue;
           }
         }
-        if (candidates.length > 1 &&
-            cells.length <= 2 &&
-            !(field == 'kj' &&
-                RegExp(
-                  r'\bkj\b.*\bkcal\b',
-                  caseSensitive: false,
-                ).hasMatch(tail))) {
+        if (candidates.length > 1) {
           entry.issues.add(
             'Ambiguous values for $label; enter the correct value in the preview.',
           );
           continue;
         }
-        final candidate = candidates[index];
+        final candidate = candidates.single;
         final value = double.tryParse(candidate[1]!.replaceAll(',', '.'));
         if (value == null || !value.isFinite || value < 0) {
           entry.issues.add('Invalid value for $label.');
@@ -525,17 +584,6 @@ class NutritionImportParser {
           }
         } else {
           entry.values[field] = value;
-          if (field == 'kj' && candidates.length > 1) {
-            final second = candidates[1];
-            if (RegExp(
-              r'^\s*kcal\b',
-              caseSensitive: false,
-            ).hasMatch(tail.substring(second.end))) {
-              entry.values['kcal'] = double.tryParse(
-                second[1]!.replaceAll(',', '.'),
-              );
-            }
-          }
         }
       }
     }

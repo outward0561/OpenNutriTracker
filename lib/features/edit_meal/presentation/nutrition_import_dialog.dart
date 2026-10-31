@@ -695,7 +695,7 @@ class _NutritionImportDialogState extends State<NutritionImportDialog> {
                     ),
                   TextButton(
                     onPressed: () => Navigator.pop(context),
-                    child: Text(S.of(context).nutritionCancelAction),
+                    child: Text(S.of(context).bulkAddWaitCancelLabel),
                   ),
                 ],
               ),

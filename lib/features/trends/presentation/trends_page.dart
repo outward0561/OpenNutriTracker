@@ -653,12 +653,15 @@ class _MacrosTrendCard extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               for (final entry in labels.entries)
-                CheckboxListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(entry.value),
-                  value: selected[entry.key],
-                  onChanged: (value) =>
-                      update(() => selected[entry.key] = value ?? false),
+                Semantics(
+                  identifier: 'trends-metric-${entry.key}',
+                  child: CheckboxListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(entry.value),
+                    value: selected[entry.key],
+                    onChanged: (value) =>
+                        update(() => selected[entry.key] = value ?? false),
+                  ),
                 ),
             ],
           ),
@@ -742,9 +745,12 @@ class _MacrosTrendCard extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                child: Text(
+                child: AutoSizeText(
                   S.of(context).trendsDailyAverageLabel,
                   style: text.titleMedium,
+                  maxLines: 1,
+                  minFontSize: 12,
+                  overflow: TextOverflow.ellipsis,
                 ),
               ),
               Semantics(

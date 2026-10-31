@@ -131,7 +131,7 @@ class _QuickAddBottomSheetState extends State<QuickAddBottomSheet> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(dialogContext, false),
-              child: Text(S.of(dialogContext).nutritionCancelAction),
+              child: Text(S.of(dialogContext).bulkAddWaitCancelLabel),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(dialogContext, true),

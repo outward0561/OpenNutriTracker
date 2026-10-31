@@ -1,3 +1,4 @@
+import 'package:auto_size_text/auto_size_text.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -80,19 +81,26 @@ TrendsLoaded _loadedToday({Map<String, bool> visibility = const {}}) {
 Future<LineChart> _pumpCaloriesChart(
   WidgetTester tester, {
   required bool usesKilojoules,
+  double textScale = 1,
 }) async {
   await tester.pumpWidget(
     ChangeNotifierProvider(
       create: (_) => EnergyUnitProvider(usesKilojoules: usesKilojoules),
-      child: const MaterialApp(
-        localizationsDelegates: [
+      child: MaterialApp(
+        builder: (context, child) => MediaQuery(
+          data: MediaQuery.of(
+            context,
+          ).copyWith(textScaler: TextScaler.linear(textScale)),
+          child: child!,
+        ),
+        localizationsDelegates: const [
           S.delegate,
           GlobalMaterialLocalizations.delegate,
           GlobalWidgetsLocalizations.delegate,
           GlobalCupertinoLocalizations.delegate,
         ],
         supportedLocales: S.supportedLocales,
-        home: Scaffold(body: TrendsPage()),
+        home: const Scaffold(body: TrendsPage()),
       ),
     ),
   );
@@ -169,6 +177,12 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Choose daily averages'), findsOneWidget);
+    for (final metric in ['calories', 'carbs', 'fat', 'protein']) {
+      expect(
+        find.bySemanticsIdentifier('trends-metric-$metric'),
+        findsOneWidget,
+      );
+    }
     for (var index = 0; index < 4; index++) {
       await tester.tap(find.byType(CheckboxListTile).at(index));
       await tester.pump();
@@ -177,6 +191,22 @@ void main() {
       tester.widget<FilledButton>(find.byType(FilledButton)).onPressed,
       isNull,
     );
+  });
+
+  testWidgets('daily-average heading stays on one line at large text scale', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(360, 2000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    await _pumpCaloriesChart(tester, usesKilojoules: false, textScale: 1.5);
+    final title = tester.widget<AutoSizeText>(
+      find.widgetWithText(AutoSizeText, 'Daily average'),
+    );
+    expect(title.maxLines, 1);
+    expect(title.overflow, TextOverflow.ellipsis);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('custom range rejects days outside 2 to 3650', (tester) async {

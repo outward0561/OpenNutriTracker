@@ -680,7 +680,7 @@ class _EditMealScreenState extends State<EditMealScreen> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
-              child: Text(S.of(context).nutritionCancelAction),
+              child: Text(S.of(context).bulkAddWaitCancelLabel),
             ),
             FilledButton(
               onPressed: () => Navigator.pop(context, true),
