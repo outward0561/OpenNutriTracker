@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:opennutritracker/core/domain/entity/intake_type_entity.dart';
+import 'package:opennutritracker/core/utils/calc/day_boundary_calc.dart';
 import 'package:opennutritracker/generated/l10n.dart';
 
 class DiaryTransferChoice {
@@ -9,6 +10,13 @@ class DiaryTransferChoice {
   final bool move;
 
   const DiaryTransferChoice(this.date, this.mealType, this.move);
+
+  /// The time a copied entry is logged at: [date]'s day label, local
+  /// midnight, which [DayBoundaryCalc.dayKeyOf] files under that day
+  /// whatever "Day starts at" is set to. Adding a past day's food does the
+  /// same. A clock time after the boundary could not: with the day starting
+  /// at 23:59, a minute past it is already the next calendar date.
+  DateTime get entryTime => DateTime(date.year, date.month, date.day);
 }
 
 class DiaryTransferDialog extends StatefulWidget {
@@ -92,19 +100,25 @@ class _DiaryTransferDialogState extends State<DiaryTransferDialog> {
           onPressed: () => Navigator.pop(context),
           child: Text(s.dialogCancelLabel),
         ),
-        TextButton(
-          onPressed: () => Navigator.pop(
-            context,
-            DiaryTransferChoice(_date, _mealType, false),
+        Semantics(
+          identifier: 'diary-transfer-copy',
+          child: TextButton(
+            onPressed: () => Navigator.pop(
+              context,
+              DiaryTransferChoice(_date, _mealType, false),
+            ),
+            child: Text(s.copyActionLabel),
           ),
-          child: Text(s.copyActionLabel),
         ),
-        FilledButton(
-          onPressed: () => Navigator.pop(
-            context,
-            DiaryTransferChoice(_date, _mealType, true),
+        Semantics(
+          identifier: 'diary-transfer-move',
+          child: FilledButton(
+            onPressed: () => Navigator.pop(
+              context,
+              DiaryTransferChoice(_date, _mealType, true),
+            ),
+            child: Text(s.diaryMoveLabel),
           ),
-          child: Text(s.diaryMoveLabel),
         ),
       ],
     );

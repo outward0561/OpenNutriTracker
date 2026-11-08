@@ -10,7 +10,6 @@ import 'package:opennutritracker/core/presentation/widgets/edit_dialog.dart';
 import 'package:opennutritracker/core/styles/dimens.dart';
 import 'package:opennutritracker/core/utils/calc/met_calc.dart';
 import 'package:opennutritracker/core/domain/usecase/get_user_usecase.dart';
-import 'package:opennutritracker/core/domain/usecase/get_config_usecase.dart';
 import 'package:opennutritracker/features/activity_detail/presentation/bloc/activity_detail_bloc.dart';
 import 'package:opennutritracker/core/utils/locator.dart';
 import 'package:opennutritracker/features/add_meal/presentation/add_meal_type.dart';
@@ -315,15 +314,6 @@ class _DiaryPageState extends State<DiaryPage> with WidgetsBindingObserver {
     _diaryBloc.updateHomePage();
   }
 
-  Future<DateTime> _entryTimeFor(DateTime day) async {
-    final config = await locator<GetConfigUsecase>().getConfig();
-    return DateTime(
-      day.year,
-      day.month,
-      day.day,
-    ).add(Duration(minutes: config.dayStartOffsetTotalMinutes + 1));
-  }
-
   Future<DiaryTransferChoice?> _chooseTransfer({
     IntakeTypeEntity? type,
     bool includesFoods = true,
@@ -346,7 +336,6 @@ class _DiaryPageState extends State<DiaryPage> with WidgetsBindingObserver {
     IntakeEntity intake,
     DiaryTransferChoice choice,
   ) async {
-    final time = await _entryTimeFor(choice.date);
     if (!mounted) throw StateError('Diary closed before transfer');
     await _mealDetailBloc.addIntake(
       context,
@@ -354,7 +343,7 @@ class _DiaryPageState extends State<DiaryPage> with WidgetsBindingObserver {
       intake.amount.toString(),
       choice.mealType ?? intake.type,
       intake.meal,
-      time,
+      choice.entryTime,
     );
   }
 
@@ -363,7 +352,7 @@ class _DiaryPageState extends State<DiaryPage> with WidgetsBindingObserver {
     DiaryTransferChoice choice,
   ) async {
     final physical = activity.physicalActivityEntity;
-    final time = await _entryTimeFor(choice.date);
+    final time = choice.entryTime;
     if (physical.isCustom) {
       final kcal = activity.userKcal ?? activity.burnedKcal;
       await _activityDetailBloc.persistActivity(
