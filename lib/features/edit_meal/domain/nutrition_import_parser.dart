@@ -146,7 +146,7 @@ NutritionBatchSelection selectNutritionBatch(
 class NutritionImportParser {
   static final _number = RegExp(r'(?<!\d)(-?\d+(?:[.,]\d+)?)(?!\d)');
   static final _nutrient = RegExp(
-    r'(?<![a-z])(?:of\s+which\s+)?(?:energy|calories?|calcium|iron|potassium|magnesium|vitamin\s*d|vitamin\s*b12|total\s+carbohydrates?|carbohydrates?|carbs?|total\s+fat|fat|saturated\s+fat(?:ty\s+acids?)?|saturates?|total\s+sugars?|sugars?|dietary\s+fib(?:er|re)|fib(?:er|re)|proteins?|salt|sodium)\b',
+    r'(?<![a-z])(?:of\s+which\s+)?(?:trans\s+fat(?:ty\s+acids?)?|(?:mono|poly)-?\s*unsaturated(?:\s+fat(?:ty\s+acids?)?)?|unsaturated\s+fat(?:ty\s+acids?)?|added\s+sugars?|sat\.?\s+fat|energy|calories?|calcium|iron|potassium|magnesium|vitamin\s*d|vitamin\s*b12|total\s+carbohydrates?|carbohydrates?|carbs?|total\s+fat|fat|saturated\s+fat(?:ty\s+acids?)?|saturates?|total\s+sugars?|sugars?|dietary\s+fib(?:er|re)|fib(?:er|re)|proteins?|salt|sodium)\b',
     caseSensitive: false,
   );
   static final _unit = RegExp(
@@ -161,6 +161,44 @@ class NutritionImportParser {
     r'\b(?:per|/|\b)\s*100\s*(g|ml)\b',
     caseSensitive: false,
   );
+  static final _headingUnit = RegExp(
+    r'(?:^|[\s(\[_/,-])(kcal|kj|mg|g|ml|µg|μg|ug|mcg)(?=$|[\s)\]_/,-])',
+    caseSensitive: false,
+  );
+
+  /// The unit a CSV heading or JSON key declares for its values, such as
+  /// `Sodium (g)` or `sodium_g`. A basis (`per 100 g`) or a serving amount
+  /// (`per serving (30 g)`) is not a unit.
+  static String? headingUnit(String heading) {
+    final stripped = heading
+        .replaceAll(_per100, ' ')
+        .replaceAll(RegExp(r'\d+(?:[.,]\d+)?\s*(?:g|ml)\b'), ' ');
+    return _headingUnit.firstMatch(stripped)?.group(1)?.toLowerCase();
+  }
+
+  /// [raw] with the heading's [unit] added when the cell names none.
+  static String _withHeadingUnit(String raw, String? unit) {
+    if (unit == null) return raw;
+    final match = _number.firstMatch(raw);
+    if (match == null) return raw;
+    final suffix = raw.substring(match.end).trimLeft();
+    if (RegExp(r'^[a-zA-Zµμ%]').hasMatch(suffix)) return raw;
+    return '${raw.substring(0, match.end)} $unit${raw.substring(match.end)}';
+  }
+
+  /// Flags energy given in both units that cannot be the same amount: one
+  /// of the two was misread, for example "1,046 kJ" taken as 1.046.
+  static void _checkEnergy(NutritionEntry entry) {
+    final kcal = entry.values['kcal'];
+    final kj = entry.values['kj'];
+    if (kcal == null || kj == null) return;
+    final difference = (kj - kcal * 4.184).abs();
+    if (difference > 5 && difference > 0.1 * kj) {
+      entry.issues.add(
+        'Energy in kJ and kcal does not match; check both values in the preview.',
+      );
+    }
+  }
 
   static String? _selectedTableCell(
     List<String> lines,
@@ -287,6 +325,13 @@ class NutritionImportParser {
   static String? fieldFor(String heading) {
     final s = heading.toLowerCase().replaceAll(RegExp(r'[_-]+'), ' ').trim();
     if (RegExp(r'%|\bdaily\s+value\b|\bdv\b').hasMatch(s)) return null;
+    // Subtypes the app does not store; without this their trailing "fat" or
+    // "sugars" would land on, and overwrite, the total.
+    if (RegExp(
+      r'\btrans\b|\b(?:mono|poly)\s*unsaturat|\bunsaturat|\badded\s+sugars?\b',
+    ).hasMatch(s)) {
+      return null;
+    }
     if (RegExp(r'\b(brand|manufacturer)\b').hasMatch(s)) return 'brand';
     if (RegExp(r'\b(serving|portion|package)\s*unit\b').hasMatch(s)) {
       return 'servingUnit';
@@ -301,7 +346,7 @@ class NutritionImportParser {
         !_nutrient.hasMatch(s)) {
       return 'servingSize';
     }
-    if (RegExp(r'\b(saturat|saturates)\w*\b').hasMatch(s)) {
+    if (RegExp(r'\b(saturat\w*|sat)\b').hasMatch(s)) {
       return 'saturatedFat';
     }
     if (RegExp(r'\b(sugar|sugars)\b').hasMatch(s)) return 'sugars';
@@ -590,6 +635,7 @@ class NutritionImportParser {
     if (!entry.hasNutrients) {
       entry.issues.add('No nutritional values recognised.');
     }
+    _checkEnergy(entry);
     return entry;
   }
 
@@ -681,7 +727,10 @@ class NutritionImportParser {
           entry.servingUnit = detectedUnit ?? entry.servingUnit;
           continue;
         }
-        final nutrient = parseNutrientCell(item.value, raw);
+        final nutrient = parseNutrientCell(
+          item.value,
+          _withHeadingUnit(raw, headingUnit(headings[item.key])),
+        );
         if (nutrient == null) {
           errors.add('Row ${row + 1}: invalid ${item.value}.');
           badRow = true;
@@ -703,6 +752,7 @@ class NutritionImportParser {
           'Row ${row + 1}: a name and at least one nutrient are required.',
         );
       } else {
+        _checkEnergy(entry);
         entries.add(entry);
       }
     }
@@ -835,7 +885,10 @@ class NutritionImportParser {
               : null;
           entry.servingUnit = detectedUnit ?? entry.servingUnit;
         } else {
-          final nutrient = parseNutrientCell(field, value);
+          final nutrient = parseNutrientCell(
+            field,
+            _withHeadingUnit(value, headingUnit(item.key)),
+          );
           if (nutrient == null) {
             errors.add('Entry ${i + 1}: invalid $field.');
             badEntry = true;
@@ -851,6 +904,7 @@ class NutritionImportParser {
           'Entry ${i + 1}: a name and at least one nutrient are required.',
         );
       } else {
+        _checkEnergy(entry);
         entries.add(entry);
       }
     }

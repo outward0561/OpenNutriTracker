@@ -359,4 +359,84 @@ Salt: 0.1 g
     );
     expect(parsed.entries.single.toPer100()['protein'], 3);
   });
+
+  // PR #1491 review: a fat subtype's trailing "Fat" read as total fat and
+  // overwrote it.
+  test('fat subtypes leave total fat alone', () {
+    final food = NutritionImportParser.parseText('''
+Nutrition Facts
+Per 100 g
+Total Fat 10 g
+Saturated Fat 3 g
+Trans Fat 0 g
+Polyunsaturated Fat 2 g
+Monounsaturated Fat 4 g
+Sat. Fat 3 g
+Total Sugars 12 g
+Added Sugars 10 g
+''');
+    expect(food.values['fat'], 10);
+    expect(food.values['saturatedFat'], 3);
+    expect(food.values['sugars'], 12);
+  });
+
+  test('subtype columns are not mapped onto total fat or sugars', () {
+    expect(NutritionImportParser.fieldFor('Trans Fat (g)'), isNull);
+    expect(NutritionImportParser.fieldFor('Monounsaturated fat'), isNull);
+    expect(NutritionImportParser.fieldFor('polyunsaturated_fat'), isNull);
+    expect(NutritionImportParser.fieldFor('Added sugars'), isNull);
+    expect(NutritionImportParser.fieldFor('Sat fat'), 'saturatedFat');
+    final parsed = NutritionImportParser.parseCsv(
+      'Name,Fat per 100 g,Trans fat per 100 g\nOats,7,0',
+    );
+    expect(parsed.entries.single.values['fat'], 7);
+  });
+
+  // PR #1491 review: a unit in a column heading was dropped, and a unitless
+  // sodium cell defaulted to milligrams.
+  test('a unit in a CSV heading applies to unitless cells', () {
+    final parsed = NutritionImportParser.parseCsv(
+      'Name,Sodium (g) per 100 g,Vitamin D [µg],Calcium mg\n'
+      'Soup,0.5,2,120\n'
+      'Stock,300 mg,1,0.1 g',
+    );
+    expect(parsed.errors, isEmpty);
+    final soup = parsed.entries[0].toPer100();
+    expect(soup['sodium'], 500);
+    expect(soup['vitaminD'], 2);
+    expect(soup['calcium'], 120);
+    // A unit in the cell wins over the heading's.
+    final stock = parsed.entries[1].toPer100();
+    expect(stock['sodium'], 300);
+    expect(stock['calcium'], 100);
+  });
+
+  test('a unit in a JSON key applies to unitless values', () {
+    final parsed = NutritionImportParser.parseJson(
+      '{"name":"Soup","basis":"per 100 g","sodium_g":0.5,"energy (kJ)":1046}',
+    );
+    final values = parsed.entries.single.values;
+    expect(values['sodium'], 500);
+    expect(values['kj'], 1046);
+  });
+
+  test('a per-100 heading is not read as the nutrient unit', () {
+    final parsed = NutritionImportParser.parseCsv(
+      'Name,Sodium per 100 g\nSoup,480',
+    );
+    expect(parsed.entries.single.values['sodium'], 480);
+  });
+
+  // Imported energy in both units must agree, or one of them was misread,
+  // for example a thousands separator ("1,046 kJ") taken as a decimal comma.
+  test('kJ and kcal that disagree are flagged for review', () {
+    final food = NutritionImportParser.parseText(
+      'Oats\nPer 100 g\nEnergy 1,046 kJ / 250 kcal\nFat 7 g',
+    );
+    expect(food.issues, isNotEmpty);
+    final consistent = NutritionImportParser.parseText(
+      'Oats\nPer 100 g\nEnergy 1046 kJ / 250 kcal\nFat 7 g',
+    );
+    expect(consistent.issues, isEmpty);
+  });
 }
