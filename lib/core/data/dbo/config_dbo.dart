@@ -212,14 +212,22 @@ class ConfigDBO extends HiveObject {
   // about the device.
   @HiveField(41)
   bool? localeSyncSeeded;
+  // #1536: whether a tip from the Support page's tip jar has gone through on
+  // this device. It only shows a "you left a tip" line on that page: text
+  // only, unlocking nothing, never sent anywhere. Device-wide like the store
+  // account that paid it, so it is absent from the personal-field overlay in
+  // `ConfigDataSource._readMerged`; Reset profile data still clears it
+  // (`DeleteAllUserDataUsecase`). Null means no tip.
+  @HiveField(42)
+  bool? hasLeftTip;
 
   // Trends choices belong to the active profile, like its tracked days.
   // Null keeps the existing 7-day range and shows every average row.
-  @HiveField(42)
+  @HiveField(49)
   Map<String, bool>? trendsMetricVisibility;
-  @HiveField(43)
+  @HiveField(50)
   int? trendsSelectedRangeDays;
-  @HiveField(44)
+  @HiveField(51)
   int? trendsCustomRangeDays;
 
   ConfigDBO(
@@ -262,6 +270,7 @@ class ConfigDBO extends HiveObject {
     this.defaultToRawFoodUnits,
     this.trackedDaysOffsetMinutes,
     this.localeSyncSeeded,
+    this.hasLeftTip,
     this.trendsMetricVisibility,
     this.trendsSelectedRangeDays,
     this.trendsCustomRangeDays,

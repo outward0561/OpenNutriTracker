@@ -214,15 +214,11 @@ void main() {
       breakfastIntake: const [],
       onTransferIntake: selected.add,
     );
-    await tester.tap(
-      find
-          .byWidgetPredicate(
-            (widget) =>
-                widget is Semantics &&
-                widget.properties.identifier == 'diary-transfer-intake',
-          )
-          .first,
-    );
+    // The transfer action sits in the food's menu, beside Share.
+    await tester.tap(find.bySemanticsIdentifier('intake-item-menu').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.bySemanticsIdentifier('diary-transfer-intake'));
+    await tester.pumpAndSettle();
     expect(selected, [_dinner]);
   });
 

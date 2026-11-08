@@ -16,6 +16,8 @@ import 'package:opennutritracker/core/utils/user_image_storage.dart';
 import 'package:opennutritracker/features/diary/presentation/widgets/diary_sort_type.dart';
 import 'package:opennutritracker/generated/l10n.dart';
 
+enum _IntakeItemAction { share, transfer }
+
 /// A logged intake, rendered as a full-width row: a rounded thumbnail, the meal
 /// name and amount, and the energy on the trailing edge. Replaces the old
 /// 120x120 tile so a day's meals read as a clean scannable list.
@@ -25,6 +27,7 @@ class IntakeCard extends StatelessWidget {
   final IntakeEntity intake;
   final Function(BuildContext, IntakeEntity)? onItemLongPressed;
   final Function(BuildContext, IntakeEntity, bool)? onItemTapped;
+  final VoidCallback? onShare;
   final bool firstListElement;
   final bool usesImperialUnits;
   final DiarySortType? sortType;
@@ -35,6 +38,7 @@ class IntakeCard extends StatelessWidget {
     required this.intake,
     this.onItemLongPressed,
     this.onItemTapped,
+    this.onShare,
     required this.firstListElement,
     required this.usesImperialUnits,
     this.sortType,
@@ -143,13 +147,40 @@ class IntakeCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                if (onTransfer != null)
+                if (onShare != null || onTransfer != null)
                   Semantics(
-                    identifier: 'diary-transfer-intake',
-                    child: IconButton(
-                      tooltip: S.of(context).diaryTransferTitle,
-                      icon: const Icon(Icons.more_vert_rounded),
-                      onPressed: () => onTransfer!(intake),
+                    identifier: 'intake-item-menu',
+                    container: true,
+                    child: PopupMenuButton<_IntakeItemAction>(
+                      icon: Icon(
+                        Icons.more_vert_rounded,
+                        color: palette.textMuted,
+                      ),
+                      shape: Dimens.shapeM,
+                      // Acting once the menu has closed: a dialog opened
+                      // from an item's onTap is popped by the menu itself.
+                      onSelected: (action) => switch (action) {
+                        _IntakeItemAction.share => onShare?.call(),
+                        _IntakeItemAction.transfer => onTransfer?.call(intake),
+                      },
+                      itemBuilder: (_) => [
+                        if (onShare != null)
+                          PopupMenuItem(
+                            value: _IntakeItemAction.share,
+                            child: Semantics(
+                              identifier: 'intake-share-food',
+                              child: Text(s.shareFoodLabel),
+                            ),
+                          ),
+                        if (onTransfer != null)
+                          PopupMenuItem(
+                            value: _IntakeItemAction.transfer,
+                            child: Semantics(
+                              identifier: 'diary-transfer-intake',
+                              child: Text(s.diaryTransferTitle),
+                            ),
+                          ),
+                      ],
                     ),
                   ),
               ],

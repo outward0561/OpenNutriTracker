@@ -128,6 +128,7 @@ class TrendsBloc extends Bloc<TrendsEvent, TrendsState> {
             ),
             metricVisibility: config.trendsMetricVisibility,
             customRangeDays: config.trendsCustomRangeDays,
+            usesImperialFoodUnits: config.usesImperialFoodUnits,
           ),
         );
       } catch (e) {

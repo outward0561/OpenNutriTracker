@@ -152,13 +152,16 @@ void main() {
           await bloc.stream.firstWhere((state) => state is DiaryLoadedState)
               as DiaryLoadedState;
       expect(loaded.trackedDayMap['2026-10-28'], goal);
+      expect(loaded.daysWithEntries, {'2026-10-28'});
 
       foods.clear();
       bloc.add(const LoadDiaryYearEvent());
       loaded =
           await bloc.stream.firstWhere((state) => state is DiaryLoadedState)
               as DiaryLoadedState;
-      expect(loaded.trackedDayMap, isEmpty);
+      // The row stays for its goal; only the marker goes.
+      expect(loaded.trackedDayMap['2026-10-28'], goal);
+      expect(loaded.daysWithEntries, isEmpty);
       expect(goal.calorieGoal, 2200);
     },
   );

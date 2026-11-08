@@ -56,9 +56,10 @@ class ConfigDBOAdapter extends TypeAdapter<ConfigDBO> {
         defaultToRawFoodUnits: fields[39] as bool?,
         trackedDaysOffsetMinutes: (fields[40] as num?)?.toInt(),
         localeSyncSeeded: fields[41] as bool?,
-        trendsMetricVisibility: (fields[42] as Map?)?.cast<String, bool>(),
-        trendsSelectedRangeDays: (fields[43] as num?)?.toInt(),
-        trendsCustomRangeDays: (fields[44] as num?)?.toInt(),
+        hasLeftTip: fields[42] as bool?,
+        trendsMetricVisibility: (fields[49] as Map?)?.cast<String, bool>(),
+        trendsSelectedRangeDays: (fields[50] as num?)?.toInt(),
+        trendsCustomRangeDays: (fields[51] as num?)?.toInt(),
       )
       ..userCarbGoalPct = (fields[6] as num?)?.toDouble()
       ..userProteinGoalPct = (fields[7] as num?)?.toDouble()
@@ -68,7 +69,7 @@ class ConfigDBOAdapter extends TypeAdapter<ConfigDBO> {
   @override
   void write(BinaryWriter writer, ConfigDBO obj) {
     writer
-      ..writeByte(45)
+      ..writeByte(46)
       ..writeByte(0)
       ..write(obj.hasAcceptedDisclaimer)
       ..writeByte(1)
@@ -154,10 +155,12 @@ class ConfigDBOAdapter extends TypeAdapter<ConfigDBO> {
       ..writeByte(41)
       ..write(obj.localeSyncSeeded)
       ..writeByte(42)
+      ..write(obj.hasLeftTip)
+      ..writeByte(49)
       ..write(obj.trendsMetricVisibility)
-      ..writeByte(43)
+      ..writeByte(50)
       ..write(obj.trendsSelectedRangeDays)
-      ..writeByte(44)
+      ..writeByte(51)
       ..write(obj.trendsCustomRangeDays);
   }
 
@@ -236,6 +239,7 @@ ConfigDBO _$ConfigDBOFromJson(Map<String, dynamic> json) =>
         trackedDaysOffsetMinutes: (json['trackedDaysOffsetMinutes'] as num?)
             ?.toInt(),
         localeSyncSeeded: json['localeSyncSeeded'] as bool?,
+        hasLeftTip: json['hasLeftTip'] as bool?,
         trendsMetricVisibility:
             (json['trendsMetricVisibility'] as Map<String, dynamic>?)?.map(
               (k, e) => MapEntry(k, e as bool),
@@ -293,6 +297,7 @@ Map<String, dynamic> _$ConfigDBOToJson(ConfigDBO instance) => <String, dynamic>{
   'defaultToRawFoodUnits': instance.defaultToRawFoodUnits,
   'trackedDaysOffsetMinutes': instance.trackedDaysOffsetMinutes,
   'localeSyncSeeded': instance.localeSyncSeeded,
+  'hasLeftTip': instance.hasLeftTip,
   'trendsMetricVisibility': instance.trendsMetricVisibility,
   'trendsSelectedRangeDays': instance.trendsSelectedRangeDays,
   'trendsCustomRangeDays': instance.trendsCustomRangeDays,

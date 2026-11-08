@@ -94,6 +94,7 @@ class _DiaryPageState extends State<DiaryPage> with WidgetsBindingObserver {
             state.usesImperialUnits,
             state.showMealMacros,
             state.showActivityTracking,
+            state.daysWithEntries,
           );
         }
         return const SizedBox();
@@ -119,12 +120,14 @@ class _DiaryPageState extends State<DiaryPage> with WidgetsBindingObserver {
     bool usesImperialUnits,
     bool showMealMacros,
     bool showActivityTracking,
+    Set<String> daysWithEntries,
   ) {
     return ListView(
       padding: const EdgeInsets.only(bottom: Dimens.spacing16),
       children: [
         DiaryTableCalendar(
           trackedDaysMap: trackedDaysMap,
+          daysWithEntries: daysWithEntries,
           onDateSelected: _onDateSelected,
           calendarDurationDays: _calendarDurationDays,
           currentDate: _currentDate,

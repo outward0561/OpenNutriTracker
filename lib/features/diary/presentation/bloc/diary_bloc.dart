@@ -52,14 +52,14 @@ class DiaryBloc extends Bloc<DiaryEvent, DiaryState> {
 
       final trackedDaysMap = {
         for (var trackedDay in trackedDays)
-          if (entryDayKeys.contains(trackedDay.day.toParsedDay()))
-            trackedDay.day.toParsedDay(): trackedDay,
+          trackedDay.day.toParsedDay(): trackedDay,
       };
 
       emit(
         DiaryLoadedState(
           trackedDaysMap,
           usesImperialUnits,
+          daysWithEntries: entryDayKeys,
           showMealMacros: showMealMacros,
           showActivityTracking: showActivityTracking,
         ),

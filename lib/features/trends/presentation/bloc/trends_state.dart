@@ -27,6 +27,8 @@ class TrendsLoaded extends TrendsState {
   final int waterGoalMl;
   final Map<String, bool> metricVisibility;
   final int? customRangeDays;
+  // #1306: water amounts follow the food unit preference (ml / fl oz).
+  final bool usesImperialFoodUnits;
 
   const TrendsLoaded({
     required this.rangeDays,
@@ -40,6 +42,7 @@ class TrendsLoaded extends TrendsState {
     required this.waterGoalMl,
     this.metricVisibility = const {},
     this.customRangeDays,
+    this.usesImperialFoodUnits = false,
   });
 
   @override
@@ -55,6 +58,7 @@ class TrendsLoaded extends TrendsState {
     waterGoalMl,
     metricVisibility,
     customRangeDays,
+    usesImperialFoodUnits,
   ];
 }
 
