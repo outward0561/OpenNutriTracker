@@ -427,11 +427,10 @@ Added Sugars 10 g
     expect(parsed.entries.single.values['sodium'], 480);
   });
 
-  // Imported energy in both units must agree, or one of them was misread,
-  // for example a thousands separator ("1,046 kJ") taken as a decimal comma.
+  // Imported energy in both units must agree, or one of them was misread.
   test('kJ and kcal that disagree are flagged for review', () {
     final food = NutritionImportParser.parseText(
-      'Oats\nPer 100 g\nEnergy 1,046 kJ / 250 kcal\nFat 7 g',
+      'Oats\nPer 100 g\nEnergy 2046 kJ / 250 kcal\nFat 7 g',
     );
     expect(food.issues, isNotEmpty);
     final consistent = NutritionImportParser.parseText(
@@ -471,5 +470,52 @@ Added Sugars 10 g
     expect(food.values['calcium'], 0.1);
     expect(food.values['vitaminD'], 5);
     expect(food.issues, isEmpty);
+  });
+
+  // Codex review: a comma before three digits is a thousands separator on
+  // US and UK labels; "1,200 mg" was read as 1.2 mg.
+  test('a thousands separator is not a decimal comma', () {
+    final food = NutritionImportParser.parseText(
+      'Soup\nPer 100 g\nEnergy 1,046 kJ / 250 kcal\nSodium 1,200 mg\n'
+      'Fat 1,5 g\nSalt 0,125 g',
+    );
+    expect(food.values['kj'], 1046);
+    expect(food.values['sodium'], 1200);
+    expect(food.values['fat'], 1.5);
+    expect(food.values['salt'], 0.125);
+    expect(food.issues, isEmpty);
+    expect(
+      NutritionImportParser.parseNutrientCell('sodium', '1,200 mg'),
+      ('sodium', 1200.0),
+    );
+    expect(NutritionImportParser.parseNumber('1,234.5'), 1234.5);
+  });
+
+  // Codex review: the first size on the label was used whatever the basis.
+  test('the size that belongs to the chosen basis is used', () {
+    const label =
+        'Crackers\nServing size: 50 g\nPackage size: 200 g\n'
+        'Per package\nEnergy 200 kcal';
+    final food = NutritionImportParser.parseText(label);
+    expect(food.basis, NutritionBasis.package);
+    expect(food.servingSize, 200);
+    expect(food.toPer100()['kcal'], 100);
+    final serving = NutritionImportParser.parseText(
+      'Crackers\nPackage size: 200 g\nServing size: 50 g\n'
+      'Per serving\nEnergy 200 kcal',
+    );
+    expect(serving.servingSize, 50);
+  });
+
+  // Codex review: "Sugar Alcohol" matched the leading "Sugar" and replaced
+  // total sugars.
+  test('sugar alcohols leave total sugars alone', () {
+    final food = NutritionImportParser.parseText(
+      'Gum\nPer 100 g\nTotal Sugars 1 g\nSugar Alcohol 14 g\n'
+      'of which polyols 14 g\nEnergy 200 kcal',
+    );
+    expect(food.values['sugars'], 1);
+    expect(NutritionImportParser.fieldFor('Sugar alcohols (g)'), isNull);
+    expect(NutritionImportParser.fieldFor('polyols'), isNull);
   });
 }

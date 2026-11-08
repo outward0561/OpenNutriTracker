@@ -148,9 +148,21 @@ NutritionBatchSelection selectNutritionBatch(
 }
 
 class NutritionImportParser {
-  static final _number = RegExp(r'(?<!\d)(-?\d+(?:[.,]\d+)?)(?!\d)');
+  /// A number: `1,200` and `1,234.5` group thousands, as US and UK labels
+  /// print them; any other comma is a decimal one (`1,5`, `0,125`).
+  static const _numberPattern =
+      r'-?(?:[1-9]\d{0,2}(?:,\d{3})+(?:\.\d+)?|\d+(?:[.,]\d+)?)';
+  static final _number = RegExp('(?<!\\d)($_numberPattern)(?!\\d)');
+  static final _groupedNumber = RegExp(r'^-?[1-9]\d{0,2}(?:,\d{3})+(?:\.\d+)?$');
+
+  /// [text], one match of [_number], as a double.
+  static double? _toDouble(String text) => double.tryParse(
+    _groupedNumber.hasMatch(text)
+        ? text.replaceAll(',', '')
+        : text.replaceAll(',', '.'),
+  );
   static final _nutrient = RegExp(
-    r'(?<![a-z])(?:of\s+which\s+)?(?:trans\s+fat(?:ty\s+acids?)?|(?:mono|poly)-?\s*unsaturated(?:\s+fat(?:ty\s+acids?)?)?|unsaturated\s+fat(?:ty\s+acids?)?|added\s+sugars?|sat\.?\s+fat|energy|calories?|calcium|iron|potassium|magnesium|vitamin\s*d|vitamin\s*b12|total\s+carbohydrates?|carbohydrates?|carbs?|total\s+fat|fat|saturated\s+fat(?:ty\s+acids?)?|saturates?|total\s+sugars?|sugars?|dietary\s+fib(?:er|re)|fib(?:er|re)|proteins?|salt|sodium)\b',
+    r'(?<![a-z])(?:of\s+which\s+)?(?:trans\s+fat(?:ty\s+acids?)?|(?:mono|poly)-?\s*unsaturated(?:\s+fat(?:ty\s+acids?)?)?|unsaturated\s+fat(?:ty\s+acids?)?|added\s+sugars?|sugar\s+alcohols?|polyols?|sat\.?\s+fat|energy|calories?|calcium|iron|potassium|magnesium|vitamin\s*d|vitamin\s*b12|total\s+carbohydrates?|carbohydrates?|carbs?|total\s+fat|fat|saturated\s+fat(?:ty\s+acids?)?|saturates?|total\s+sugars?|sugars?|dietary\s+fib(?:er|re)|fib(?:er|re)|proteins?|salt|sodium)\b',
     caseSensitive: false,
   );
   static final _unit = RegExp(
@@ -158,7 +170,7 @@ class NutritionImportParser {
     caseSensitive: false,
   );
   static final _serving = RegExp(
-    r'(?:serving\s*size|portion\s*size|package\s*size|per\s+(?:serving|portion|package))\s*[:(]?\s*(\d+(?:[.,]\d+)?)\s*(g|ml)\b',
+    r'(?:(serving|portion|package)\s*size|per\s+(serving|portion|package))\s*[:(]?\s*(\d+(?:[.,]\d+)?)\s*(g|ml)\b',
     caseSensitive: false,
   );
   static final _per100 = RegExp(
@@ -250,7 +262,7 @@ class NutritionImportParser {
   static double? parseNumber(String text) {
     final match = _number.firstMatch(text);
     if (match == null) return null;
-    final parsed = double.tryParse(match[1]!.replaceAll(',', '.'));
+    final parsed = _toDouble(match[1]!);
     return parsed != null && parsed >= 0 ? parsed : null;
   }
 
@@ -286,7 +298,7 @@ class NutritionImportParser {
   static (String, double)? parseNutrientCell(String field, String raw) {
     final match = _number.firstMatch(raw);
     if (match == null) return null;
-    final value = double.tryParse(match[1]!.replaceAll(',', '.'));
+    final value = _toDouble(match[1]!);
     if (value == null || !value.isFinite || value < 0) return null;
     final suffix = raw.substring(match.end).trimLeft();
     final unit = RegExp(
@@ -332,7 +344,7 @@ class NutritionImportParser {
     // Subtypes the app does not store; without this their trailing "fat" or
     // "sugars" would land on, and overwrite, the total.
     if (RegExp(
-      r'\btrans\b|\b(?:mono|poly)\s*unsaturat|\bunsaturat|\badded\s+sugars?\b',
+      r'\btrans\b|\b(?:mono|poly)\s*unsaturat|\bunsaturat|\badded\s+sugars?\b|\bsugar\s+alcohols?\b|\bpolyols?\b',
     ).hasMatch(s)) {
       return null;
     }
@@ -416,37 +428,41 @@ class NutritionImportParser {
         .split('\n')
         .where((l) => l.trim().isNotEmpty)
         .toList();
-    final serving = _serving.firstMatch(text);
-    if (serving != null) {
-      entry.servingSize = parseNumber(serving[1]!);
-      entry.servingUnit = serving[2]!.toLowerCase();
-    } else {
-      final labeledMetricSize = RegExp(
-        r'^(?:serving|portion|package)\s*size\s*[:\t]\s*[^\r\n]*?(\d+(?:[.,]\d+)?)\s*(g|ml)\b',
-        caseSensitive: false,
-        multiLine: true,
-      ).firstMatch(text);
-      if (labeledMetricSize != null) {
-        entry.servingSize = parseNumber(labeledMetricSize[1]!);
-        entry.servingUnit = labeledMetricSize[2]!.toLowerCase();
-      }
-      final size = RegExp(
-        r'^(?:serving|portion|package)\s*size\s*[:\t]\s*(\d+(?:[.,]\d+)?)\s*$',
-        caseSensitive: false,
-        multiLine: true,
-      ).firstMatch(text);
-      if (size != null && entry.servingSize == null) {
-        entry.servingSize = parseNumber(size[1]!);
-      }
+    // Each kind of size the label gives; the basis picks one below.
+    final sizes = <String, (double?, String?)>{};
+    for (final match in _serving.allMatches(text)) {
+      final kind = (match[1] ?? match[2])!.toLowerCase();
+      sizes.putIfAbsent(
+        kind,
+        () => (parseNumber(match[3]!), match[4]!.toLowerCase()),
+      );
+    }
+    for (final match in RegExp(
+      r'^(serving|portion|package)\s*size\s*[:\t]\s*[^\r\n]*?(\d+(?:[.,]\d+)?)\s*(g|ml)\b',
+      caseSensitive: false,
+      multiLine: true,
+    ).allMatches(text)) {
+      sizes.putIfAbsent(
+        match[1]!.toLowerCase(),
+        () => (parseNumber(match[2]!), match[3]!.toLowerCase()),
+      );
+    }
+    for (final match in RegExp(
+      r'^(serving|portion|package)\s*size\s*[:\t]\s*(\d+(?:[.,]\d+)?)\s*$',
+      caseSensitive: false,
+      multiLine: true,
+    ).allMatches(text)) {
+      sizes.putIfAbsent(
+        match[1]!.toLowerCase(),
+        () => (parseNumber(match[2]!), null),
+      );
     }
     final explicitUnit = RegExp(
       r'^(?:serving|portion|package)\s*unit\s*[:\t]\s*(g|ml)\s*$',
       caseSensitive: false,
       multiLine: true,
     ).firstMatch(text);
-    if (explicitUnit != null) {
-      entry.servingUnit = explicitUnit[1]!.toLowerCase();
-    }
+    final explicitServingUnit = explicitUnit?[1]!.toLowerCase();
     final basisHints = <NutritionBasis>[];
     for (final line in lines) {
       for (final cell in line.split('\t')) {
@@ -466,6 +482,20 @@ class NutritionImportParser {
             ? basisHints.first
             : NutritionBasis.unknown);
     entry.basis = preferred;
+    final size =
+        sizes[switch (preferred) {
+          NutritionBasis.portion => 'portion',
+          NutritionBasis.package => 'package',
+          _ => 'serving',
+        }] ??
+        (sizes.length == 1
+            ? sizes.values.single
+            : sizes['serving'] ?? sizes['portion'] ?? sizes['package']);
+    if (size != null) {
+      entry.servingSize = size.$1;
+      entry.servingUnit = size.$2;
+    }
+    entry.servingUnit = explicitServingUnit ?? entry.servingUnit;
     if (selectedBasis != null &&
         basisHints.length == 1 &&
         selectedBasis != basisHints.first) {
@@ -562,7 +592,7 @@ class NutritionImportParser {
         if (candidates.isEmpty || field == null) continue;
         if (candidates.length > 1 && (field == 'kcal' || field == 'kj')) {
           final energyValues = RegExp(
-            r'(-?\d+(?:[.,]\d+)?)\s*(kcal|kj)\b',
+            '($_numberPattern)\\s*(kcal|kj)\\b',
             caseSensitive: false,
           ).allMatches(tail).toList();
           if (energyValues.length == 2 &&
@@ -571,7 +601,7 @@ class NutritionImportParser {
                   energyValues[1][2]!.toLowerCase()) {
             final values = [
               for (final energy in energyValues)
-                double.tryParse(energy[1]!.replaceAll(',', '.')),
+                _toDouble(energy[1]!),
             ];
             if (values.any(
               (value) => value == null || !value.isFinite || value < 0,
@@ -597,7 +627,7 @@ class NutritionImportParser {
           continue;
         }
         final candidate = candidates.single;
-        final value = double.tryParse(candidate[1]!.replaceAll(',', '.'));
+        final value = _toDouble(candidate[1]!);
         if (value == null || !value.isFinite || value < 0) {
           entry.issues.add('Invalid value for $label.');
           continue;
