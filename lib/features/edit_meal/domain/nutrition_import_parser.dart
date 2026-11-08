@@ -286,7 +286,7 @@ class NutritionImportParser {
     if (value == null || !value.isFinite || value < 0) return null;
     final suffix = raw.substring(match.end).trimLeft();
     final unit = RegExp(
-      r'^[a-zA-Zµ%]+',
+      r'^[a-zA-Zµμ%]+',
     ).firstMatch(suffix)?.group(0)?.toLowerCase();
     if (unit == '%') return null;
     if (field == 'kcal' || field == 'kj') {
@@ -600,9 +600,9 @@ class NutritionImportParser {
         }
         final after = tail.substring(candidate.end).trimLeft();
         final unit = _unit.firstMatch(after)?.group(1)?.toLowerCase();
-        if (unit == null && RegExp(r'^[a-zA-Zµ]+').hasMatch(after)) {
+        if (unit == null && RegExp(r'^[a-zA-Zµμ]+').hasMatch(after)) {
           entry.issues.add(
-            'Unsupported unit for $label: ${RegExp(r'^[a-zA-Zµ]+').firstMatch(after)!.group(0)}.',
+            'Unsupported unit for $label: ${RegExp(r'^[a-zA-Zµμ]+').firstMatch(after)!.group(0)}.',
           );
           continue;
         }

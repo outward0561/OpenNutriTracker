@@ -457,4 +457,19 @@ Added Sugars 10 g
     expect(parsed.entries, isEmpty);
     expect(parsed.errors, isNotEmpty);
   });
+
+  // Codex review: Greek mu (U+03BC) was not read as a unit, so 100 μg of
+  // calcium fell back to milligrams.
+  test('micrograms written with the Greek mu are micrograms', () {
+    expect(NutritionImportParser.parseNutrientCell('calcium', '100 μg'), (
+      'calcium',
+      0.1,
+    ));
+    final food = NutritionImportParser.parseText(
+      'Oats\nPer 100 g\nCalcium 100 μg\nVitamin D 5 μg',
+    );
+    expect(food.values['calcium'], 0.1);
+    expect(food.values['vitaminD'], 5);
+    expect(food.issues, isEmpty);
+  });
 }
