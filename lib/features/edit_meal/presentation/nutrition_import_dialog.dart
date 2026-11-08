@@ -607,7 +607,7 @@ class _NutritionImportDialogState extends State<NutritionImportDialog> {
                                     NutritionBasis.per100g => '100 g',
                                     NutritionBasis.per100ml => '100 ml',
                                     NutritionBasis.serving =>
-                                      S.of(context).nutritionServingBasisLabel,
+                                      S.of(context).servingLabel,
                                     NutritionBasis.portion =>
                                       S.of(context).nutritionPortionBasisLabel,
                                     NutritionBasis.package =>

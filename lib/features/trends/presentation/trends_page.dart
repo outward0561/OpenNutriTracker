@@ -219,7 +219,7 @@ class _RangeSelector extends StatelessWidget {
                 value: -1,
                 label: Text(
                   customRangeDays == null
-                      ? S.of(context).trendsCustomRangeLabel
+                      ? S.of(context).fastingPresetCustom
                       : '${customRangeDays}d',
                 ),
               ),

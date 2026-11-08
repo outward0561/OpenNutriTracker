@@ -3,6 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:opennutritracker/features/edit_meal/presentation/nutrition_import_dialog.dart';
 import 'package:opennutritracker/generated/l10n.dart';
 
+import '../../../helpers/test_l10n.dart';
+
 void main() {
   testWidgets('save feedback stays visible beside the action', (tester) async {
     await tester.pumpWidget(
@@ -158,7 +160,7 @@ void main() {
     );
     await tester.tap(basis);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('serving').last);
+    await tester.tap(find.text(l10nEn.servingLabel).last);
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
       protein,
