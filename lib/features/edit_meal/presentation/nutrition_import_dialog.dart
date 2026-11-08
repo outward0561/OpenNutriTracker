@@ -297,11 +297,11 @@ class _NutritionImportDialogState extends State<NutritionImportDialog> {
           ? result.entries[_index]
           : NutritionEntry(basis: basis);
     } else {
-      final blocks = _paste.text.trim().split(RegExp(r'\r?\n\s*\r?\n+'));
-      parsed = NutritionImportParser.parseText(
-        blocks.length > _index ? blocks[_index] : _paste.text,
-        selectedBasis: basis,
-      );
+      // The entry's own block: blocks without nutrients are dropped from
+      // the entries, so a position in the paste can name another food.
+      final source = _current.sourceText ?? _paste.text;
+      parsed = NutritionImportParser.parseText(source, selectedBasis: basis)
+        ..sourceText = source;
     }
     parsed.name = _name.text;
     parsed.brand = _brand.text;

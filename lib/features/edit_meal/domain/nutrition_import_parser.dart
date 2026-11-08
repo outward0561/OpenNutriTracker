@@ -37,6 +37,10 @@ class NutritionEntry {
   final Map<String, double?> values;
   final List<String> issues;
 
+  /// The pasted label this entry was read from, for re-reading it under
+  /// another basis. Null for file rows.
+  String? sourceText;
+
   NutritionEntry({
     this.name = '',
     this.brand = '',
@@ -260,7 +264,7 @@ class NutritionImportParser {
         .where((block) => block.isNotEmpty)
         .toList();
     if (blocks.length <= 1) {
-      final entry = parseText(text);
+      final entry = parseText(text)..sourceText = text;
       return NutritionFileResult(
         entry.hasNutrients ? [entry] : const [],
         entry.hasNutrients ? const [] : entry.issues,
@@ -269,7 +273,7 @@ class NutritionImportParser {
     final entries = <NutritionEntry>[];
     final errors = <String>[];
     for (var i = 0; i < blocks.length; i++) {
-      final entry = parseText(blocks[i]);
+      final entry = parseText(blocks[i])..sourceText = blocks[i];
       if (entry.hasNutrients) {
         entries.add(entry);
       } else {

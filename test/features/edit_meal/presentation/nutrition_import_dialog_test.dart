@@ -294,4 +294,68 @@ void main() {
       expect(acknowledged(tester), isFalse);
     });
   });
+
+  // Codex review: with a block that holds no food before two labels, a
+  // basis change re-read the food before the selected one.
+  testWidgets('a basis change re-reads the selected food\'s own label', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(900, 1800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: const [S.delegate],
+        supportedLocales: S.supportedLocales,
+        home: Scaffold(
+          body: Builder(
+            builder: (context) => TextButton(
+              onPressed: () => showDialog<void>(
+                context: context,
+                builder: (_) => NutritionImportDialog(saveAll: (_) async => ''),
+              ),
+              child: const Text('Open'),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Open'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.bySemanticsIdentifier('nutrition-paste-text'),
+      'Shopping list\n\n'
+      'Oats\nNutrient\tPer 100 g\tPer serving\nServing size: 25 g\n'
+      'Protein\t12g\t3g\n\n'
+      'Bread\nNutrient\tPer 100 g\tPer serving\nServing size: 50 g\n'
+      'Protein\t8g\t4g',
+    );
+    await tester.tap(find.bySemanticsIdentifier('nutrition-parse-paste'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.bySemanticsIdentifier('nutrition-entry-tab-1'));
+    await tester.pumpAndSettle();
+
+    final protein = find.descendant(
+      of: find.bySemanticsIdentifier('nutrition-protein'),
+      matching: find.byType(TextField),
+    );
+    final basis = find.byKey(const ValueKey('basis-NutritionBasis.per100g'));
+    await tester.scrollUntilVisible(
+      basis,
+      100,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.ensureVisible(basis);
+    await tester.pumpAndSettle();
+    await tester.tap(basis);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(l10nEn.servingLabel).last);
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      protein,
+      200,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(tester.widget<TextField>(protein).controller!.text, '4.0');
+  });
 }
