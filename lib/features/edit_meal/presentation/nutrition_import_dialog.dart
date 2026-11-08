@@ -777,9 +777,11 @@ class _NutritionImportDialogState extends State<NutritionImportDialog> {
     String label,
     TextEditingController controller, {
     bool numeric = false,
-    String? id,
+    required String id,
   }) => Semantics(
-    identifier: 'nutrition-${id ?? label}',
+    // Kebab case, so a field key like `vitaminB12` is `nutrition-vitamin-b12`.
+    identifier:
+        'nutrition-${id.replaceAllMapped(RegExp('[A-Z]'), (m) => '-${m[0]!.toLowerCase()}')}',
     child: _labeledInput(
       label,
       TextField(

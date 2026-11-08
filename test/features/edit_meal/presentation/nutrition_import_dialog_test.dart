@@ -358,4 +358,34 @@ void main() {
     );
     expect(tester.widget<TextField>(protein).controller!.text, '4.0');
   });
+
+  // Codex review: the nutrient fields' identifiers took the camel-case
+  // field keys (`nutrition-saturatedFat`).
+  testWidgets('nutrient fields have kebab-case identifiers', (tester) async {
+    tester.view.physicalSize = const Size(900, 4000);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: const [S.delegate],
+        supportedLocales: S.supportedLocales,
+        home: const Scaffold(body: NutritionImportDialog()),
+      ),
+    );
+    await tester.enterText(
+      find.bySemanticsIdentifier('nutrition-paste-text'),
+      'Oats\nPer 100 g\nEnergy 370 kcal',
+    );
+    await tester.tap(find.bySemanticsIdentifier('nutrition-parse-paste'));
+    await tester.pumpAndSettle();
+    final scrollable = find.byType(Scrollable).first;
+    for (final id in ['saturated-fat', 'vitamin-d', 'vitamin-b12']) {
+      await tester.scrollUntilVisible(
+        find.bySemanticsIdentifier('nutrition-$id'),
+        200,
+        scrollable: scrollable,
+      );
+      expect(find.bySemanticsIdentifier('nutrition-$id'), findsOneWidget);
+    }
+  });
 }
