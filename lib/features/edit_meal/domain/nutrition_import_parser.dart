@@ -41,6 +41,11 @@ class NutritionEntry {
   /// another basis. Null for file rows.
   String? sourceText;
 
+  /// The row (CSV) or object (JSON) this entry was read from, for finding
+  /// it again when the file is re-read under another basis. Null for
+  /// pasted labels.
+  int? sourceRow;
+
   NutritionEntry({
     this.name = '',
     this.brand = '',
@@ -95,6 +100,18 @@ class NutritionEntry {
 }
 
 class NutritionFileResult {
+  /// The entry read from the same row as [entry], or null when that row
+  /// produced none, such as a row with no values under another basis.
+  NutritionEntry? entryFromRowOf(NutritionEntry entry) {
+    for (final candidate in entries) {
+      if (candidate.sourceRow != null &&
+          candidate.sourceRow == entry.sourceRow) {
+        return candidate;
+      }
+    }
+    return null;
+  }
+
   final List<NutritionEntry> entries;
   final List<String> errors;
   final List<String> headings;
@@ -711,7 +728,7 @@ class NutritionImportParser {
     final entries = <NutritionEntry>[];
     for (var row = 1; row < records.length; row++) {
       final cells = records[row];
-      final entry = NutritionEntry();
+      final entry = NutritionEntry()..sourceRow = row;
       final mappedBases = mapping.keys.map((i) => _basis(headings[i])).toSet();
       entry.basis =
           selectedBasis ??
@@ -870,7 +887,7 @@ class NutritionImportParser {
         continue;
       }
       final object = Map<String, dynamic>.from(list[i] as Map);
-      final entry = NutritionEntry();
+      final entry = NutritionEntry()..sourceRow = i;
       final keyedBases = object.keys.map(_basis).toSet();
       entry.basis =
           selectedBasis ??

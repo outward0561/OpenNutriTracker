@@ -518,4 +518,35 @@ Added Sugars 10 g
     expect(NutritionImportParser.fieldFor('Sugar alcohols (g)'), isNull);
     expect(NutritionImportParser.fieldFor('polyols'), isNull);
   });
+
+  // Codex review: re-reading a file under another basis matched foods by
+  // position, so a row left out under the new basis shifted the others.
+  test('a re-read file is matched to its foods by row', () {
+    const csv =
+        'Name,Energy per 100 g,Energy per serving,Serving size\n'
+        'Oats,370,,\n'
+        'Bread,250,125,50 g';
+    final first = NutritionImportParser.parseCsv(csv);
+    final oats = first.entries[0];
+    final bread = first.entries[1];
+    final serving = NutritionImportParser.parseCsv(
+      csv,
+      manualMapping: first.mapping,
+      selectedBasis: NutritionBasis.serving,
+    );
+    expect(serving.entryFromRowOf(oats), isNull);
+    expect(serving.entryFromRowOf(bread)?.values['kcal'], 125);
+
+    final json = NutritionImportParser.parseJson(
+      '[{"name":"Oats","energy per 100 g":370},'
+      '{"name":"Bread","energy per 100 g":250,"energy per serving":125}]',
+    );
+    final jsonServing = NutritionImportParser.parseJson(
+      '[{"name":"Oats","energy per 100 g":370},'
+      '{"name":"Bread","energy per 100 g":250,"energy per serving":125}]',
+      selectedBasis: NutritionBasis.serving,
+    );
+    expect(jsonServing.entryFromRowOf(json.entries[0]), isNull);
+    expect(jsonServing.entryFromRowOf(json.entries[1])?.values['kcal'], 125);
+  });
 }

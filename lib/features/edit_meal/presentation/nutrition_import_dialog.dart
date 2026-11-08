@@ -274,28 +274,23 @@ class _NutritionImportDialogState extends State<NutritionImportDialog> {
               manualMapping: source.result.mapping,
               selectedBasis: basis,
             );
-      final localIndex = _index - offset;
-      parsed = localIndex < result.entries.length
-          ? result.entries[localIndex]
-          : NutritionEntry(basis: basis);
+      // By row, not position: a row without values under [basis] is left
+      // out, and the position would then name the next food.
+      parsed = result.entryFromRowOf(_current) ?? NutritionEntry(basis: basis);
     } else if (_csvText != null && _file != null) {
       final result = NutritionImportParser.parseCsv(
         _csvText!,
         manualMapping: _file!.mapping,
         selectedBasis: basis,
       );
-      parsed = result.entries.length == _entries.length
-          ? result.entries[_index]
-          : NutritionEntry(basis: basis);
+      parsed = result.entryFromRowOf(_current) ?? NutritionEntry(basis: basis);
     } else if (_jsonText != null) {
       final result = NutritionImportParser.parseJson(
         _jsonText!,
         selectedBasis: basis,
         manualMapping: _file?.mapping,
       );
-      parsed = result.entries.length == _entries.length
-          ? result.entries[_index]
-          : NutritionEntry(basis: basis);
+      parsed = result.entryFromRowOf(_current) ?? NutritionEntry(basis: basis);
     } else {
       // The entry's own block: blocks without nutrients are dropped from
       // the entries, so a position in the paste can name another food.
