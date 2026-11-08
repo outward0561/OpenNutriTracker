@@ -45,6 +45,11 @@ class _NutritionImportDialogState extends State<NutritionImportDialog> {
   int _index = 0;
   bool _busy = false;
   bool _acknowledgedIssues = false;
+
+  /// The foods whose parser issues the user marked as reviewed, by identity:
+  /// switching foods reloads the checkbox from here. A basis change
+  /// re-parses a food into a new entry, whose issues need a new review.
+  final _reviewed = Set<NutritionEntry>.identity();
   String? _message;
   NutritionBasis _basis = NutritionBasis.unknown;
   String? _unit;
@@ -64,6 +69,7 @@ class _NutritionImportDialogState extends State<NutritionImportDialog> {
   }
 
   void _showEntries(List<NutritionEntry> entries, List<String> errors) {
+    _reviewed.clear();
     setState(() {
       _entries = entries;
       _errors = errors;
@@ -75,8 +81,8 @@ class _NutritionImportDialogState extends State<NutritionImportDialog> {
 
   void _load(int index) {
     _index = index;
-    _acknowledgedIssues = false;
     final entry = _current;
+    _acknowledgedIssues = _reviewed.contains(entry);
     _name.text = entry.name;
     _brand.text = entry.brand;
     _size.text = entry.servingSize?.toString() ?? '';
@@ -94,6 +100,7 @@ class _NutritionImportDialogState extends State<NutritionImportDialog> {
       setState(() => _message = S.of(context).nutritionReviewIssuesLabel);
       return false;
     }
+    if (entry.issues.isNotEmpty) _reviewed.add(entry);
     if (!FoodNameValidator.isValid(_name.text)) {
       setState(() => _message = S.of(context).mealNameValidationError);
       return false;
@@ -311,9 +318,24 @@ class _NutritionImportDialogState extends State<NutritionImportDialog> {
     _load(_index);
   }
 
+  /// Opens the first food whose issues have not been reviewed, and says so.
+  /// False when every food's issues were.
+  bool _showUnreviewed() {
+    for (var i = 0; i < _entries.length; i++) {
+      final entry = _entries[i];
+      if (entry.issues.isNotEmpty && !_reviewed.contains(entry)) {
+        _load(i);
+        setState(() => _message = S.of(context).nutritionReviewIssuesLabel);
+        return true;
+      }
+    }
+    return false;
+  }
+
   Future<void> _saveBatch() async {
     final saveAll = widget.saveAll;
     if (!_commit() || _busy || saveAll == null) return;
+    if (_showUnreviewed()) return;
     setState(() => _busy = true);
     try {
       final summary = await saveAll(_entries);
@@ -349,11 +371,8 @@ class _NutritionImportDialogState extends State<NutritionImportDialog> {
         setState(() => _message = error.message);
         return;
       }
-      if (entry.issues.isNotEmpty && entry != _current) {
-        setState(() => _message = S.of(context).nutritionReviewIssuesLabel);
-        return;
-      }
     }
+    if (_showUnreviewed()) return;
     setState(() => _busy = true);
     try {
       await applyAll(_entries);
@@ -551,9 +570,12 @@ class _NutritionImportDialogState extends State<NutritionImportDialog> {
                           identifier: 'nutrition-acknowledge-issues',
                           child: CheckboxListTile(
                             value: _acknowledgedIssues,
-                            onChanged: (value) => setState(
-                              () => _acknowledgedIssues = value ?? false,
-                            ),
+                            onChanged: (value) => setState(() {
+                              _acknowledgedIssues = value ?? false;
+                              if (!_acknowledgedIssues) {
+                                _reviewed.remove(_current);
+                              }
+                            }),
                             title: Text(
                               S.of(context).nutritionReviewIssuesLabel,
                             ),

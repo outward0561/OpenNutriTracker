@@ -167,4 +167,129 @@ void main() {
     );
     expect(tester.widget<TextField>(protein).controller!.text, '3.0');
   });
+
+  // PR #1491 review: acknowledging each food's parser issues was forgotten
+  // on switching foods, so a batch with two such foods could never be added.
+  group('issue acknowledgement is kept per food', () {
+    const twoAmbiguous =
+        'Oats\nPer 100 g\nEnergy 100 kcal\nFat 3 g 4 g\n\n'
+        'Bread\nPer 100 g\nEnergy 250 kcal\nFat 1 g 2 g';
+
+    Future<void> open(
+      WidgetTester tester, {
+      Future<String> Function(List<dynamic>)? saveAll,
+      Future<void> Function(List<dynamic>)? applyAll,
+    }) async {
+      tester.view.physicalSize = const Size(900, 1800);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: const [S.delegate],
+          supportedLocales: S.supportedLocales,
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => TextButton(
+                onPressed: () => showDialog<void>(
+                  context: context,
+                  builder: (_) => NutritionImportDialog(
+                    saveAll: saveAll,
+                    applyAll: applyAll,
+                  ),
+                ),
+                child: const Text('Open'),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('Open'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.bySemanticsIdentifier('nutrition-paste-text'),
+        twoAmbiguous,
+      );
+      await tester.tap(find.bySemanticsIdentifier('nutrition-parse-paste'));
+      await tester.pumpAndSettle();
+    }
+
+    Future<void> acknowledge(WidgetTester tester) async {
+      final checkbox = find.descendant(
+        of: find.bySemanticsIdentifier('nutrition-acknowledge-issues'),
+        matching: find.byType(Checkbox),
+      );
+      await tester.ensureVisible(checkbox);
+      await tester.pumpAndSettle();
+      await tester.tap(checkbox);
+      await tester.pumpAndSettle();
+    }
+
+    Future<void> showFood(WidgetTester tester, int index) async {
+      await tester.scrollUntilVisible(
+        find.bySemanticsIdentifier('nutrition-entry-tab-$index'),
+        -200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.tap(find.bySemanticsIdentifier('nutrition-entry-tab-$index'));
+      await tester.pumpAndSettle();
+    }
+
+    bool acknowledged(WidgetTester tester) => tester
+        .widget<Checkbox>(
+          find.descendant(
+            of: find.bySemanticsIdentifier('nutrition-acknowledge-issues'),
+            matching: find.byType(Checkbox),
+          ),
+        )
+        .value!;
+
+    testWidgets('both reviewed foods are added to the meal', (tester) async {
+      List<dynamic>? applied;
+      await open(tester, applyAll: (entries) async => applied = entries);
+      await acknowledge(tester);
+      await showFood(tester, 1);
+      await acknowledge(tester);
+      await showFood(tester, 0);
+      expect(acknowledged(tester), isTrue);
+
+      await tester.tap(find.bySemanticsIdentifier('nutrition-add-all-to-meal'));
+      await tester.pumpAndSettle();
+      expect(applied, hasLength(2));
+    });
+
+    testWidgets('saving stops at a food whose issues were not reviewed', (
+      tester,
+    ) async {
+      var saves = 0;
+      await open(
+        tester,
+        saveAll: (_) async {
+          saves++;
+          return '';
+        },
+      );
+      await acknowledge(tester);
+      await tester.tap(find.bySemanticsIdentifier('nutrition-save-all'));
+      await tester.pumpAndSettle();
+
+      expect(saves, 0);
+      await tester.scrollUntilVisible(
+        find.bySemanticsIdentifier('nutrition-entry-tab-1'),
+        -200,
+        scrollable: find.byType(Scrollable).first,
+      );
+      expect(
+        tester
+            .widget<ChoiceChip>(
+              find.descendant(
+                of: find.bySemanticsIdentifier('nutrition-entry-tab-1'),
+                matching: find.byType(ChoiceChip),
+              ),
+            )
+            .selected,
+        isTrue,
+      );
+      expect(acknowledged(tester), isFalse);
+    });
+  });
 }
