@@ -588,13 +588,6 @@ jobs:
         # should validate.
         run: flutter build apk --flavor full --debug
 
-      - name: Upload debug APK artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: opennutritracker-debug-apk
-          path: build/app/outputs/flutter-apk/app-debug.apk
-          if-no-files-found: error
-          retention-days: 7
 
   android-integration-tests:
     # Same as iOS: runs in parallel from the start, gated on neither
