@@ -64,8 +64,8 @@ class _RecipeBuilderScreenState extends State<RecipeBuilderScreen> {
     super.didChangeDependencies();
     if (!_initialized) {
       _initialized = true;
-      final args =
-          ModalRoute.of(context)?.settings.arguments as RecipeBuilderArguments?;
+      final args = ModalRoute.of(context)?.settings.arguments
+          as RecipeBuilderArguments?;
       _bloc.add(InitializeBuilderEvent(existing: args?.existing));
       if (args?.existing != null) {
         final r = args!.existing!;
@@ -131,221 +131,212 @@ class _RecipeBuilderScreenState extends State<RecipeBuilderScreen> {
           },
           child: Scaffold(
             appBar: AppBar(
-              toolbarHeight: MediaQuery.textScalerOf(
-                context,
-              ).scale(kToolbarHeight),
-              title: Text(
-                state.isExistingRecipe
-                    ? S.of(context).editRecipeTitle
-                    : S.of(context).createRecipeTitle,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-              actions: [
-                if (state.isSaving)
-                  const Padding(
-                    padding: EdgeInsets.only(right: 16),
-                    child: Center(
-                      child: SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      ),
-                    ),
-                  )
-                else
-                  Semantics(
-                    identifier: 'recipe-builder-save',
-                    child: TextButton.icon(
-                      onPressed: () => _bloc.add(const SaveRecipeEvent()),
-                      icon: const Icon(Icons.save_outlined),
-                      label: Text(S.of(context).recipeSaveLabel),
+            toolbarHeight: MediaQuery.textScalerOf(context).scale(kToolbarHeight),
+            title: Text(
+              state.isExistingRecipe
+                  ? S.of(context).editRecipeTitle
+                  : S.of(context).createRecipeTitle,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            actions: [
+              if (state.isSaving)
+                const Padding(
+                  padding: EdgeInsets.only(right: 16),
+                  child: Center(
+                    child: SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
                     ),
                   ),
-              ],
-            ),
-            body: ListView(
-              padding: const EdgeInsets.all(Dimens.spacing16),
-              children: [
-                UserImagePickerTile(
-                  kind: UserImageKind.recipe,
-                  imagePath: state.imagePath,
-                  onPickFromGallery: () =>
-                      _onPickImage(context, source: ImageSource.gallery),
-                  onTakePhoto: () =>
-                      _onPickImage(context, source: ImageSource.camera),
-                  onRemove: () => _onRemoveImage(context),
-                ),
-                const SizedBox(height: Dimens.spacing16),
+                )
+              else
                 Semantics(
-                  identifier: 'recipe-builder-paste-nutrition',
-                  child: OutlinedButton.icon(
-                    onPressed: () => _openNutritionPaste(context),
-                    icon: const Icon(Icons.content_paste_outlined),
-                    label: Text(S.of(context).nutritionPasteAction),
+                  identifier: 'recipe-builder-save',
+                  child: TextButton.icon(
+                    onPressed: () => _bloc.add(const SaveRecipeEvent()),
+                    icon: const Icon(Icons.save_outlined),
+                    label: Text(S.of(context).recipeSaveLabel),
                   ),
                 ),
-                const SizedBox(height: Dimens.spacing12),
-                TextField(
-                  controller: _nameController,
-                  decoration: InputDecoration(
-                    labelText: S.of(context).recipeNameLabel,
-                    border: fieldBorder,
-                    enabledBorder: fieldBorder,
-                  ),
-                  onChanged: (v) => _bloc.add(UpdateNameEvent(v)),
+            ],
+          ),
+          body: ListView(
+            padding: const EdgeInsets.all(Dimens.spacing16),
+            children: [
+              UserImagePickerTile(
+                kind: UserImageKind.recipe,
+                imagePath: state.imagePath,
+                onPickFromGallery: () => _onPickImage(
+                  context,
+                  source: ImageSource.gallery,
                 ),
-                const SizedBox(height: Dimens.spacing12),
-                TextField(
-                  controller: _descriptionController,
-                  maxLines: 2,
-                  decoration: InputDecoration(
-                    labelText: S.of(context).recipeDescriptionLabel,
-                    border: fieldBorder,
-                    enabledBorder: fieldBorder,
-                  ),
-                  onChanged: (v) => _bloc.add(UpdateDescriptionEvent(v)),
+                onTakePhoto: () => _onPickImage(
+                  context,
+                  source: ImageSource.camera,
                 ),
-                const SizedBox(height: Dimens.spacing12),
-                TextField(
-                  controller: _servingsController,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  decoration: InputDecoration(
-                    labelText: S.of(context).recipeServingsCountLabel,
-                    helperText: S.of(context).recipeServingsCountHelper,
-                    helperMaxLines: 2,
-                    border: fieldBorder,
-                    enabledBorder: fieldBorder,
-                  ),
-                  onChanged: (v) {
-                    final parsed = v.trim().isEmpty ? null : int.tryParse(v);
-                    _bloc.add(UpdateServingsCountEvent(parsed));
-                  },
+                onRemove: () => _onRemoveImage(context),
+              ),
+              const SizedBox(height: Dimens.spacing16),
+              Semantics(
+                identifier: 'recipe-builder-paste-nutrition',
+                child: OutlinedButton.icon(
+                  onPressed: () => _openNutritionPaste(context),
+                  icon: const Icon(Icons.content_paste_outlined),
+                  label: Text(S.of(context).nutritionPasteAction),
                 ),
-                const SizedBox(height: Dimens.spacing12),
-                TextField(
-                  controller: _tagsController,
-                  decoration: InputDecoration(
-                    labelText: S.of(context).recipeTagsLabel,
-                    helperText: S.of(context).recipeTagsHelper,
-                    helperMaxLines: 2,
-                    border: fieldBorder,
-                    enabledBorder: fieldBorder,
-                  ),
-                  onChanged: (v) {
-                    final parsed = v
-                        .split(',')
-                        .map((t) => t.trim())
-                        .where((t) => t.isNotEmpty)
-                        .toList();
-                    _bloc.add(UpdateTagsEvent(parsed));
-                  },
+              ),
+              const SizedBox(height: Dimens.spacing12),
+              TextField(
+                controller: _nameController,
+                decoration: InputDecoration(
+                  labelText: S.of(context).recipeNameLabel,
+                  border: fieldBorder,
+                  enabledBorder: fieldBorder,
                 ),
-                const SizedBox(height: Dimens.spacing24),
-                Text(
-                  S.of(context).recipeIngredientsLabel,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+                onChanged: (v) => _bloc.add(UpdateNameEvent(v)),
+              ),
+              const SizedBox(height: Dimens.spacing12),
+              TextField(
+                controller: _descriptionController,
+                maxLines: 2,
+                decoration: InputDecoration(
+                  labelText: S.of(context).recipeDescriptionLabel,
+                  border: fieldBorder,
+                  enabledBorder: fieldBorder,
                 ),
-                const SizedBox(height: Dimens.spacing8),
-                if (state.ingredients.isEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(
-                      vertical: Dimens.spacing16,
+                onChanged: (v) => _bloc.add(UpdateDescriptionEvent(v)),
+              ),
+              const SizedBox(height: Dimens.spacing12),
+              TextField(
+                controller: _servingsController,
+                keyboardType: TextInputType.number,
+                inputFormatters: [
+                  FilteringTextInputFormatter.digitsOnly,
+                ],
+                decoration: InputDecoration(
+                  labelText: S.of(context).recipeServingsCountLabel,
+                  helperText: S.of(context).recipeServingsCountHelper,
+                  helperMaxLines: 2,
+                  border: fieldBorder,
+                  enabledBorder: fieldBorder,
+                ),
+                onChanged: (v) {
+                  final parsed = v.trim().isEmpty ? null : int.tryParse(v);
+                  _bloc.add(UpdateServingsCountEvent(parsed));
+                },
+              ),
+              const SizedBox(height: Dimens.spacing12),
+              TextField(
+                controller: _tagsController,
+                decoration: InputDecoration(
+                  labelText: S.of(context).recipeTagsLabel,
+                  helperText: S.of(context).recipeTagsHelper,
+                  helperMaxLines: 2,
+                  border: fieldBorder,
+                  enabledBorder: fieldBorder,
+                ),
+                onChanged: (v) {
+                  final parsed = v
+                      .split(',')
+                      .map((t) => t.trim())
+                      .where((t) => t.isNotEmpty)
+                      .toList();
+                  _bloc.add(UpdateTagsEvent(parsed));
+                },
+              ),
+              const SizedBox(height: Dimens.spacing24),
+              Text(
+                S.of(context).recipeIngredientsLabel,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              ),
+              const SizedBox(height: Dimens.spacing8),
+              if (state.ingredients.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: Dimens.spacing16),
+                  child: Center(
+                    child: Text(
+                      S.of(context).recipeNoIngredientsLabel,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: palette.textMuted),
                     ),
-                    child: Center(
-                      child: Text(
-                        S.of(context).recipeNoIngredientsLabel,
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: palette.textMuted,
-                        ),
+                  ),
+                )
+              else
+                ...List.generate(
+                  state.ingredients.length,
+                  (i) => IngredientListItem(
+                    ingredient: state.ingredients[i],
+                    onEdit: () => _onEditIngredient(context, i),
+                    onRemove: () => _bloc.add(RemoveIngredientEvent(i)),
+                  ),
+                ),
+              const SizedBox(height: Dimens.spacing8),
+              OutlinedButton.icon(
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: Dimens.spacing16),
+                  side: BorderSide(color: palette.border, width: Dimens.hairline),
+                  shape: Dimens.shapeM,
+                ),
+                onPressed: () => _onAddIngredient(context),
+                icon: const Icon(Icons.add_rounded),
+                label: Text(S.of(context).recipeAddIngredientLabel),
+              ),
+              const SizedBox(height: Dimens.spacing24),
+              TextField(
+                controller: _totalWeightController,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                inputFormatters: [
+                  FilteringTextInputFormatter.allow(
+                    RegExp(r'^\d+([.,]\d{0,2})?$'),
+                  ),
+                ],
+                decoration: InputDecoration(
+                  labelText: S.of(context).recipeTotalWeightLabel,
+                  // Says which of the two the number is, since nothing else
+                  // on screen does unless the ingredients are added up.
+                  helperText: state.totalWeightOverridden
+                      ? S.of(context).recipeTotalWeightManualHelper
+                      : S.of(context).recipeTotalWeightCalculatedHelper,
+                  helperMaxLines: 3,
+                  border: fieldBorder,
+                  enabledBorder: fieldBorder,
+                ),
+                onChanged: (v) {
+                  final raw = v.replaceAll(',', '.');
+                  final parsed = double.tryParse(raw);
+                  if (parsed != null && parsed > 0) {
+                    _bloc.add(UpdateTotalWeightEvent(parsed));
+                  }
+                },
+              ),
+              // The way back from a typed weight. Without it the only route
+              // was typing the exact ingredient sum and reopening the recipe.
+              if (state.totalWeightOverridden)
+                Align(
+                  alignment: AlignmentDirectional.centerEnd,
+                  child: Semantics(
+                    identifier: 'recipe-builder-weight-reset',
+                    child: TextButton.icon(
+                      onPressed: () =>
+                          _bloc.add(const ResetTotalWeightEvent()),
+                      icon: const Icon(Icons.calculate_outlined),
+                      label: Text(
+                        S.of(context).recipeTotalWeightUseIngredientTotalButton,
                       ),
                     ),
-                  )
-                else
-                  ...List.generate(
-                    state.ingredients.length,
-                    (i) => IngredientListItem(
-                      ingredient: state.ingredients[i],
-                      onEdit: () => _onEditIngredient(context, i),
-                      onRemove: () => _bloc.add(RemoveIngredientEvent(i)),
-                    ),
                   ),
-                const SizedBox(height: Dimens.spacing8),
-                OutlinedButton.icon(
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(
-                      vertical: Dimens.spacing16,
-                    ),
-                    side: BorderSide(
-                      color: palette.border,
-                      width: Dimens.hairline,
-                    ),
-                    shape: Dimens.shapeM,
-                  ),
-                  onPressed: () => _onAddIngredient(context),
-                  icon: const Icon(Icons.add_rounded),
-                  label: Text(S.of(context).recipeAddIngredientLabel),
                 ),
-                const SizedBox(height: Dimens.spacing24),
-                TextField(
-                  controller: _totalWeightController,
-                  keyboardType: const TextInputType.numberWithOptions(
-                    decimal: true,
-                  ),
-                  inputFormatters: [
-                    FilteringTextInputFormatter.allow(
-                      RegExp(r'^\d+([.,]\d{0,2})?$'),
-                    ),
-                  ],
-                  decoration: InputDecoration(
-                    labelText: S.of(context).recipeTotalWeightLabel,
-                    // Says which of the two the number is, since nothing else
-                    // on screen does unless the ingredients are added up.
-                    helperText: state.totalWeightOverridden
-                        ? S.of(context).recipeTotalWeightManualHelper
-                        : S.of(context).recipeTotalWeightCalculatedHelper,
-                    helperMaxLines: 3,
-                    border: fieldBorder,
-                    enabledBorder: fieldBorder,
-                  ),
-                  onChanged: (v) {
-                    final raw = v.replaceAll(',', '.');
-                    final parsed = double.tryParse(raw);
-                    if (parsed != null && parsed > 0) {
-                      _bloc.add(UpdateTotalWeightEvent(parsed));
-                    }
-                  },
-                ),
-                // The way back from a typed weight. Without it the only route
-                // was typing the exact ingredient sum and reopening the recipe.
-                if (state.totalWeightOverridden)
-                  Align(
-                    alignment: AlignmentDirectional.centerEnd,
-                    child: Semantics(
-                      identifier: 'recipe-builder-weight-reset',
-                      child: TextButton.icon(
-                        onPressed: () =>
-                            _bloc.add(const ResetTotalWeightEvent()),
-                        icon: const Icon(Icons.calculate_outlined),
-                        label: Text(
-                          S
-                              .of(context)
-                              .recipeTotalWeightUseIngredientTotalButton,
-                        ),
-                      ),
-                    ),
-                  ),
-                const SizedBox(height: Dimens.spacing16),
-                RecipeNutritionSummary(
-                  nutrimentsPer100: state.aggregatedNutrimentsPer100,
-                  totalWeightG: state.totalWeightG,
-                ),
-                const SizedBox(height: Dimens.spacing32),
-              ],
-            ),
+              const SizedBox(height: Dimens.spacing16),
+              RecipeNutritionSummary(
+                nutrimentsPer100: state.aggregatedNutrimentsPer100,
+                totalWeightG: state.totalWeightG,
+              ),
+              const SizedBox(height: Dimens.spacing32),
+            ],
+          ),
           ),
         );
       },
@@ -396,7 +387,9 @@ class _RecipeBuilderScreenState extends State<RecipeBuilderScreen> {
     final selectedMeal = await Navigator.of(context).push<MealEntity>(
       MaterialPageRoute(
         builder: (searchContext) => Scaffold(
-          appBar: AppBar(title: Text(S.of(context).recipeAddIngredientLabel)),
+          appBar: AppBar(
+            title: Text(S.of(context).recipeAddIngredientLabel),
+          ),
           body: FoodSearchTabView(
             onMealSelected: (meal) => Navigator.of(searchContext).pop(meal),
             onBarcodePressed: () async {
@@ -405,10 +398,11 @@ class _RecipeBuilderScreenState extends State<RecipeBuilderScreen> {
               // then thread the scanned meal through the same code path the
               // tap-to-pick handler uses, so the quantity dialog runs
               // identically whether the user typed or scanned.
-              final scannedMeal = await Navigator.of(searchContext).pushNamed(
-                NavigationOptions.scannerRoute,
-                arguments: ScannerScreenArguments.pick(),
-              );
+              final scannedMeal = await Navigator.of(searchContext)
+                  .pushNamed(
+                    NavigationOptions.scannerRoute,
+                    arguments: ScannerScreenArguments.pick(),
+                  );
               if (scannedMeal is MealEntity && searchContext.mounted) {
                 Navigator.of(searchContext).pop(scannedMeal);
               }
@@ -548,7 +542,8 @@ class _RecipeBuilderScreenState extends State<RecipeBuilderScreen> {
       );
       // Bust the in-memory Image.file cache so the new picture shows up
       // immediately instead of redrawing the previous bytes for this path.
-      FileImage(File(await UserImageStorage.absolutePath(relative))).evict();
+      FileImage(File(await UserImageStorage.absolutePath(relative)))
+          .evict();
       _bloc.add(UpdateImagePathEvent(relative));
     } catch (_) {
       if (!context.mounted) return;
@@ -573,8 +568,9 @@ class _RecipeBuilderScreenState extends State<RecipeBuilderScreen> {
       SaveError.invalidTotalWeight => s.recipeInvalidTotalWeightLabel,
       SaveError.unknown => s.recipeSaveErrorLabel,
     };
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message)),
+    );
   }
+
 }
