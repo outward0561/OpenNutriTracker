@@ -35,7 +35,7 @@ class ProductsBloc extends Bloc<ProductsEvent, ProductsState> {
   int _generation = 0;
 
   ProductsBloc(this._searchProductUseCase, this._getConfigUsecase)
-    : super(ProductsInitial()) {
+      : super(ProductsInitial()) {
     on<LoadProductsEvent>(
       (event, emit) => _loadProducts(event.searchString, emit, force: true),
     );

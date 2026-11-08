@@ -940,11 +940,9 @@ class _AddMealScreenState extends State<AddMealScreen> {
                       // A provider timeout or rate limit doesn't fail the
                       // bloc: the use case falls back to local matches and
                       // flags the gap on the loaded state instead.
-                      final productsFailed =
-                          ps is ProductsFailedState ||
+                      final productsFailed = ps is ProductsFailedState ||
                           (ps is ProductsLoadedState && ps.remoteSourceFailed);
-                      final foodFailed =
-                          fs is FoodFailedState ||
+                      final foodFailed = fs is FoodFailedState ||
                           (fs is FoodLoadedState && fs.remoteSourceFailed);
                       final VoidCallback retryFailed =
                           productsFailed && foodFailed

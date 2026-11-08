@@ -46,11 +46,7 @@ class _ActivityVerticalListState extends State<ActivityVerticalList> {
       children: [
         Container(
           padding: const EdgeInsets.fromLTRB(
-            Dimens.spacing16,
-            Dimens.spacing16,
-            Dimens.spacing16,
-            Dimens.spacing8,
-          ),
+              Dimens.spacing16, Dimens.spacing16, Dimens.spacing16, Dimens.spacing8),
           alignment: Alignment.centerLeft,
           child: Row(
             children: [
@@ -79,9 +75,9 @@ class _ActivityVerticalListState extends State<ActivityVerticalList> {
                       }
                     case _ActivityPopupMenuSelection.onShare:
                       if (context.mounted) {
-                        final code = SharedActivityPayload.fromUserActivityList(
-                          widget.userActivityList,
-                        ).toJsonString();
+                        final code = SharedActivityPayload
+                                .fromUserActivityList(widget.userActivityList)
+                            .toJsonString();
                         await showDialog(
                           context: context,
                           builder: (_) => ShareQrDialog(
@@ -101,22 +97,22 @@ class _ActivityVerticalListState extends State<ActivityVerticalList> {
                 },
                 itemBuilder: (BuildContext context) =>
                     <PopupMenuEntry<_ActivityPopupMenuSelection>>[
-                      if (widget.onCopyActivityCallback != null &&
-                          widget.userActivityList.isNotEmpty)
-                        PopupMenuItem<_ActivityPopupMenuSelection>(
-                          value: _ActivityPopupMenuSelection.onCopy,
-                          child: Text(S.of(context).dialogCopyLabel),
-                        ),
-                      if (widget.userActivityList.isNotEmpty)
-                        PopupMenuItem<_ActivityPopupMenuSelection>(
-                          value: _ActivityPopupMenuSelection.onShare,
-                          child: Text(S.of(context).shareActivityLabel),
-                        ),
-                      PopupMenuItem<_ActivityPopupMenuSelection>(
-                        value: _ActivityPopupMenuSelection.onImport,
-                        child: Text(S.of(context).importActivityLabel),
-                      ),
-                    ],
+                  if (widget.onCopyActivityCallback != null &&
+                      widget.userActivityList.isNotEmpty)
+                    PopupMenuItem<_ActivityPopupMenuSelection>(
+                      value: _ActivityPopupMenuSelection.onCopy,
+                      child: Text(S.of(context).dialogCopyLabel),
+                    ),
+                  if (widget.userActivityList.isNotEmpty)
+                    PopupMenuItem<_ActivityPopupMenuSelection>(
+                      value: _ActivityPopupMenuSelection.onShare,
+                      child: Text(S.of(context).shareActivityLabel),
+                    ),
+                  PopupMenuItem<_ActivityPopupMenuSelection>(
+                    value: _ActivityPopupMenuSelection.onImport,
+                    child: Text(S.of(context).importActivityLabel),
+                  ),
+                ],
               ),
             ],
           ),

@@ -61,9 +61,7 @@ class MealItemCard extends StatelessWidget {
     // noun reliably identifies the food ("Milk, fluid, nonfat..." → milk).
     // OFF products are branded, so a head-noun match would often be
     // misleading; they keep the outline icon as a placeholder.
-    final emoji =
-        (mealEntity.thumbnailImageUrl == null &&
-            mealEntity.source == MealSourceEntity.fdc)
+    final emoji = (mealEntity.thumbnailImageUrl == null && mealEntity.source == MealSourceEntity.fdc)
         ? resolveFoodEmoji(mealEntity.name)
         : null;
     return Padding(
@@ -92,8 +90,9 @@ class MealItemCard extends StatelessWidget {
                       children: [
                         TextSpan(
                           text: ' ${mealEntity.brands ?? ""}',
-                          style: Theme.of(context).textTheme.bodyMedium
-                              ?.copyWith(color: palette.textMuted),
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                color: palette.textMuted,
+                              ),
                         ),
                       ],
                     ),
@@ -180,12 +179,7 @@ class MealItemCard extends StatelessWidget {
     );
   }
 
-  Widget _buildSubtitle(
-    BuildContext context,
-    AppPalette palette,
-    Color accent,
-    bool isRecipe,
-  ) {
+  Widget _buildSubtitle(BuildContext context, AppPalette palette, Color accent, bool isRecipe) {
     if (isRecipe) {
       return _labelChip(
         context,
@@ -250,10 +244,7 @@ class MealItemCard extends StatelessWidget {
     required Color foreground,
   }) {
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: Dimens.spacing8,
-        vertical: Dimens.spacing4,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: Dimens.spacing8, vertical: Dimens.spacing4),
       decoration: BoxDecoration(
         color: background,
         borderRadius: Dimens.borderRadiusS,

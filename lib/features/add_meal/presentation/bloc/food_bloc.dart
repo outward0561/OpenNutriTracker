@@ -29,7 +29,7 @@ class FoodBloc extends Bloc<FoodEvent, FoodState> {
   int _generation = 0;
 
   FoodBloc(this._searchProductUseCase, this._getConfigUsecase)
-    : super(FoodInitial()) {
+      : super(FoodInitial()) {
     on<LoadFoodEvent>(
       (event, emit) => _loadFood(event.searchString, emit, force: true),
     );
