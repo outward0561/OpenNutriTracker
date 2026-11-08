@@ -645,21 +645,7 @@ class _EditMealScreenState extends State<EditMealScreen> {
       if (energy != null)
         _kcalTextController: (usesKj ? UnitCalc.kcalToKj(energy) : energy)
             .toString(),
-      for (final item in <String, TextEditingController>{
-        'carbs': _carbsTextController,
-        'fat': _fatTextController,
-        'protein': _proteinTextController,
-        'fiber': _fiberTextController,
-        'saturatedFat': _saturatedFatTextController,
-        'sugars': _sugarsTextController,
-        'sodium': _sodiumTextController,
-        'calcium': _calciumTextController,
-        'iron': _ironTextController,
-        'potassium': _potassiumTextController,
-        'magnesium': _magnesiumTextController,
-        'vitaminD': _vitaminDTextController,
-        'vitaminB12': _vitaminB12TextController,
-      }.entries)
+      for (final item in _nutrientControllers.entries)
         if (values[item.key] != null) item.value: values[item.key]!.toString(),
     };
     final replaced = imported.entries
@@ -691,6 +677,17 @@ class _EditMealScreenState extends State<EditMealScreen> {
       );
       if (confirmed != true || !mounted) return;
     }
+    // The import switches the form to per-100 values; the ones it does not
+    // bring were typed on the old basis and are rescaled to stay the same
+    // amount, as Save would have.
+    final retainedFactor = _per100FactorOfForm();
+    final retained = [_kcalTextController, ..._nutrientControllers.values]
+        .where(
+          (controller) =>
+              !imported.containsKey(controller) &&
+              double.tryParse(controller.text) != null,
+        )
+        .toList();
     final oldUnit = selectedUnit ?? 'g';
     final oldMealQuantity = _usesImperialUnits && !_importedMetricMode &&
             _mealQuantityTextController.text.isNotEmpty
@@ -723,10 +720,52 @@ class _EditMealScreenState extends State<EditMealScreen> {
       if (entry.servingSize != null) {
         _servingQuantityTextController.text = entry.servingSize.toString();
       }
+      if (retainedFactor != 1) {
+        for (final controller in retained) {
+          final value = double.parse(controller.text) * retainedFactor;
+          controller.text = double.parse(value.toStringAsFixed(3)).toString();
+        }
+      }
       for (final item in imported.entries) {
         if (item.value.isNotEmpty) item.key.text = item.value;
       }
     });
+  }
+
+  /// The nutrient fields other than energy, by import field name.
+  Map<String, TextEditingController> get _nutrientControllers => {
+    'carbs': _carbsTextController,
+    'fat': _fatTextController,
+    'protein': _proteinTextController,
+    'fiber': _fiberTextController,
+    'saturatedFat': _saturatedFatTextController,
+    'sugars': _sugarsTextController,
+    'sodium': _sodiumTextController,
+    'calcium': _calciumTextController,
+    'iron': _ironTextController,
+    'potassium': _potassiumTextController,
+    'magnesium': _magnesiumTextController,
+    'vitaminD': _vitaminDTextController,
+    'vitaminB12': _vitaminB12TextController,
+  };
+
+  /// What Save multiplies the typed nutrient values by to store them per
+  /// 100: the same arithmetic as `_onSavePressed`, for the form as it is.
+  double _per100FactorOfForm() {
+    if (_formMode == CustomMealFormMode.simple) return 1;
+    final baseText = _baseQuantityTextController.text;
+    final factor = factorTo100gFromBase(baseText);
+    if (!_isTotal) return factor;
+    final mealText = _usesImperialUnits && !_importedMetricMode
+        ? _convertToMetric(
+            _mealQuantityTextController.text,
+            selectedUnit ?? _mealEntity.mealUnit ?? '0',
+          )
+        : _mealQuantityTextController.text;
+    final mealQuantity = double.tryParse(mealText) ?? 0.0;
+    if (mealQuantity <= 0) return factor;
+    final base = double.tryParse(baseText) ?? 100.0;
+    return base / mealQuantity * factor;
   }
 
   Future<String> _saveNutritionBatch(List<NutritionEntry> entries) async {
