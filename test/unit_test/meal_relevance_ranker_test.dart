@@ -66,6 +66,19 @@ void main() {
     },
   );
 
+  // PR #1491 review: a refresh that no longer returned a shown food left it
+  // on screen, and selectable.
+  test('a shown result a refresh no longer returns is dropped', () {
+    final apple = _meal(name: 'Apple', code: 'a');
+    final pear = _meal(name: 'Pear', code: 'p');
+    final plum = _meal(name: 'Plum', code: 'q');
+    expect(
+      appendStableSearchResults([apple, pear], [plum, pear]),
+      [pear, plum],
+    );
+    expect(appendStableSearchResults([apple, pear], const []), isEmpty);
+  });
+
   group('scoreMealRelevance', () {
     test('scores an exact name match at the maximum', () {
       final meal = _meal(name: 'Milk');
