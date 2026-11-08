@@ -14,7 +14,6 @@ import 'package:opennutritracker/core/utils/navigation_options.dart';
 import 'package:opennutritracker/core/utils/id_generator.dart';
 import 'package:opennutritracker/core/utils/user_image_storage.dart';
 import 'package:opennutritracker/features/add_meal/domain/entity/meal_entity.dart';
-import 'package:opennutritracker/features/add_meal/domain/entity/meal_nutriments_entity.dart';
 import 'package:opennutritracker/features/edit_meal/domain/nutrition_import_parser.dart';
 import 'package:opennutritracker/features/edit_meal/presentation/nutrition_import_dialog.dart';
 import 'package:opennutritracker/features/edit_meal/presentation/nutrition_import_saver.dart';
@@ -454,24 +453,8 @@ class _RecipeBuilderScreenState extends State<RecipeBuilderScreen> {
         (_nameController.text.trim().isNotEmpty ? 1 : 0) +
         _bloc.state.ingredients.length;
     if (replacements > 0) {
-      final replace = await showDialog<bool>(
-        context: context,
-        builder: (dialogContext) => AlertDialog(
-          title: Text(S.of(dialogContext).nutritionReplaceTitle),
-          content: Text(S.of(dialogContext).nutritionReplaceBody(replacements)),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext, false),
-              child: Text(S.of(dialogContext).bulkAddWaitCancelLabel),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(dialogContext, true),
-              child: Text(S.of(dialogContext).nutritionReplaceAction),
-            ),
-          ],
-        ),
-      );
-      if (replace != true || !context.mounted) {
+      final replace = await confirmNutritionReplace(context, replacements);
+      if (!replace || !context.mounted) {
         throw const FormatException('Import was cancelled.');
       }
     }
@@ -496,22 +479,7 @@ class _RecipeBuilderScreenState extends State<RecipeBuilderScreen> {
         servingSize: entry.servingSize == null
             ? null
             : '${entry.servingSize} g',
-        nutriments: MealNutrimentsEntity(
-          energyKcal100: values['kcal'],
-          carbohydrates100: values['carbs'],
-          fat100: values['fat'],
-          proteins100: values['protein'],
-          sugars100: values['sugars'],
-          saturatedFat100: values['saturatedFat'],
-          fiber100: values['fiber'],
-          sodium100: values['sodium'],
-          potassium100: values['potassium'],
-          magnesium100: values['magnesium'],
-          calcium100: values['calcium'],
-          iron100: values['iron'],
-          vitaminD100: values['vitaminD'],
-          vitaminB12100: values['vitaminB12'],
-        ),
+        nutriments: importedNutriments(values),
         source: MealSourceEntity.custom,
       );
       final amount = entry.basis == NutritionBasis.per100g

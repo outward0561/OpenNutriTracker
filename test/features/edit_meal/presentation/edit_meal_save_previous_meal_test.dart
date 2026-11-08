@@ -195,9 +195,7 @@ void main() {
       FilledButton, l10nEn.nutritionApplyAction,
     ));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(
-      FilledButton, l10nEn.nutritionReplaceAction,
-    ));
+    await tester.tap(find.bySemanticsIdentifier('nutrition-replace-confirm'));
     await tester.pumpAndSettle();
 
     await save(tester);

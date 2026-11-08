@@ -177,6 +177,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Choose daily averages'), findsOneWidget);
+    expect(find.bySemanticsIdentifier('trends-metrics-save'), findsOneWidget);
     for (final metric in ['calories', 'carbs', 'fat', 'protein']) {
       expect(
         find.bySemanticsIdentifier('trends-metric-$metric'),
@@ -217,6 +218,10 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Custom trend range'), findsOneWidget);
+    expect(
+      find.bySemanticsIdentifier('trends-custom-days-save'),
+      findsOneWidget,
+    );
     await tester.enterText(find.byType(TextField), '1');
     await tester.tap(find.widgetWithText(FilledButton, 'Save'));
     await tester.pump();

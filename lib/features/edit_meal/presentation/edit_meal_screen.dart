@@ -27,9 +27,9 @@ import 'package:opennutritracker/core/utils/navigation_options.dart';
 import 'package:opennutritracker/core/utils/navigation_predicates.dart';
 import 'package:opennutritracker/features/add_meal/presentation/log_tray.dart';
 import 'package:opennutritracker/features/add_meal/domain/entity/meal_entity.dart';
-import 'package:opennutritracker/features/add_meal/domain/entity/meal_nutriments_entity.dart';
 import 'package:opennutritracker/features/edit_meal/domain/nutrition_import_parser.dart';
 import 'package:opennutritracker/features/edit_meal/presentation/nutrition_import_dialog.dart';
+import 'package:opennutritracker/features/edit_meal/presentation/nutrition_import_saver.dart';
 import 'package:opennutritracker/features/edit_meal/presentation/bloc/edit_meal_bloc.dart';
 import 'package:opennutritracker/features/edit_meal/presentation/widgets/default_meal_image.dart';
 import 'package:opennutritracker/features/meal_detail/meal_detail_screen.dart';
@@ -656,26 +656,8 @@ class _EditMealScreenState extends State<EditMealScreen> {
         )
         .length;
     if (replaced > 0) {
-      final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (_) => AlertDialog(
-          title: Text(S.of(context).nutritionReplaceTitle),
-          content: Text(
-            S.of(context).nutritionReplaceBody(replaced),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: Text(S.of(context).bulkAddWaitCancelLabel),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: Text(S.of(context).nutritionReplaceAction),
-            ),
-          ],
-        ),
-      );
-      if (confirmed != true || !mounted) return;
+      final confirmed = await confirmNutritionReplace(context, replaced);
+      if (!confirmed || !mounted) return;
     }
     // The import switches the form to per-100 values; the ones it does not
     // bring were typed on the old basis and are rescaled to stay the same
@@ -770,49 +752,15 @@ class _EditMealScreenState extends State<EditMealScreen> {
 
   Future<String> _saveNutritionBatch(List<NutritionEntry> entries) async {
     final s = S.of(context);
-    final selection = selectNutritionBatch(entries, _editMealBloc.customMealNames);
-    var saved = 0;
-    for (final entry in selection.entries) {
-      final values = entry.toPer100();
-      final unit = entry.basis == NutritionBasis.per100ml
-          ? 'ml'
-          : entry.basis == NutritionBasis.per100g
-          ? 'g'
-          : entry.servingUnit!;
-      final meal = MealEntity(
-        code: MealEntity.empty().code,
-        name: entry.name.trim(),
-        brands: entry.brand.trim(),
-        url: null,
-        mealQuantity: '100',
-        mealUnit: unit,
-        servingQuantity: entry.servingSize,
-        servingUnit: unit,
-        servingSize: entry.servingSize == null
-            ? null
-            : '${entry.servingSize} $unit',
-        source: MealSourceEntity.custom,
-        nutriments: MealNutrimentsEntity(
-          energyKcal100: values['kcal'],
-          carbohydrates100: values['carbs'],
-          fat100: values['fat'],
-          proteins100: values['protein'],
-          sugars100: values['sugars'],
-          saturatedFat100: values['saturatedFat'],
-          fiber100: values['fiber'],
-          sodium100: values['sodium'],
-          calcium100: values['calcium'],
-          iron100: values['iron'],
-          potassium100: values['potassium'],
-          magnesium100: values['magnesium'],
-          vitaminD100: values['vitaminD'],
-          vitaminB12100: values['vitaminB12'],
-        ),
-      );
-      await _editMealBloc.saveCustomMeal(meal);
-      saved++;
-    }
-    return s.nutritionBatchSummary(saved, selection.duplicates, selection.invalid);
+    final selection = await saveImportedNutritionEntries(
+      _editMealBloc,
+      entries,
+    );
+    return s.nutritionBatchSummary(
+      selection.entries.length,
+      selection.duplicates,
+      selection.invalid,
+    );
   }
 
   Widget _buildMicroField(

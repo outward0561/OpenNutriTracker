@@ -139,25 +139,9 @@ class _QuickAddBottomSheetState extends State<QuickAddBottomSheet> {
               item.key.text.trim() != item.value,
         )
         .length;
-    if (replacements > 0) {
-      final replace = await showDialog<bool>(
-        context: context,
-        builder: (dialogContext) => AlertDialog(
-          title: Text(S.of(dialogContext).nutritionReplaceTitle),
-          content: Text(S.of(dialogContext).nutritionReplaceBody(replacements)),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext, false),
-              child: Text(S.of(dialogContext).bulkAddWaitCancelLabel),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(dialogContext, true),
-              child: Text(S.of(dialogContext).nutritionReplaceAction),
-            ),
-          ],
-        ),
-      );
-      if (replace != true || !mounted) return;
+    if (replacements > 0 &&
+        (!await confirmNutritionReplace(context, replacements) || !mounted)) {
+      return;
     }
     setState(() {
       for (final item in imported.entries) {

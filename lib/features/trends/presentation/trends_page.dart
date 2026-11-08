@@ -177,18 +177,21 @@ class _RangeSelector extends StatelessWidget {
               onPressed: () => Navigator.pop(dialogContext),
               child: Text(S.of(dialogContext).dialogCancelLabel),
             ),
-            FilledButton(
-              onPressed: () {
-                final parsed = int.tryParse(input.trim());
-                if (parsed == null || parsed < 2 || parsed > 3650) {
-                  update(
-                    () => error = S.of(dialogContext).trendsCustomRangeInvalid,
-                  );
-                  return;
-                }
-                Navigator.pop(dialogContext, parsed);
-              },
-              child: Text(S.of(dialogContext).buttonSaveLabel),
+            Semantics(
+              identifier: 'trends-custom-days-save',
+              child: FilledButton(
+                onPressed: () {
+                  final parsed = int.tryParse(input.trim());
+                  if (parsed == null || parsed < 2 || parsed > 3650) {
+                    update(
+                      () => error = S.of(dialogContext).trendsCustomRangeInvalid,
+                    );
+                    return;
+                  }
+                  Navigator.pop(dialogContext, parsed);
+                },
+                child: Text(S.of(dialogContext).buttonSaveLabel),
+              ),
             ),
           ],
         ),
@@ -685,11 +688,14 @@ class _MacrosTrendCard extends StatelessWidget {
               onPressed: () => Navigator.pop(dialogContext),
               child: Text(S.of(dialogContext).dialogCancelLabel),
             ),
-            FilledButton(
-              onPressed: selected.values.any((visible) => visible)
-                  ? () => Navigator.pop(dialogContext, selected)
-                  : null,
-              child: Text(S.of(dialogContext).buttonSaveLabel),
+            Semantics(
+              identifier: 'trends-metrics-save',
+              child: FilledButton(
+                onPressed: selected.values.any((visible) => visible)
+                    ? () => Navigator.pop(dialogContext, selected)
+                    : null,
+                child: Text(S.of(dialogContext).buttonSaveLabel),
+              ),
             ),
           ],
         ),

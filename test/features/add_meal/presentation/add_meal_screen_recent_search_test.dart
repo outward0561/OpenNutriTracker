@@ -563,6 +563,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(_withIdentifier('selected-food-amount-0'), findsOneWidget);
       expect(_withIdentifier('selected-food-unit-0'), findsOneWidget);
+      expect(_withIdentifier('selected-foods-add'), findsOneWidget);
 
       await tester.tap(find.text(l10nEn.addSelectedFoodsLabel));
       await tester.pump();

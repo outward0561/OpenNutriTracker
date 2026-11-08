@@ -334,89 +334,92 @@ class _AddMealScreenState extends State<AddMealScreen> {
                 onPressed: saving ? null : () => Navigator.pop(dialogContext),
                 child: Text(S.of(context).dialogCancelLabel),
               ),
-              FilledButton(
-                onPressed: saving
-                    ? null
-                    : () async {
-                        final parsed = amounts
-                            .map(
-                              (c) => double.tryParse(
-                                c.text.trim().replaceAll(',', '.'),
-                              ),
-                            )
-                            .toList();
-                        if (parsed
-                            .skip(nextIndex)
-                            .any(
-                              (value) =>
-                                  value == null ||
-                                  !value.isFinite ||
-                                  value <= 0,
-                            )) {
-                          update(
-                            () =>
-                                error = S.of(context).enterPositiveAmountsLabel,
-                          );
-                          return;
-                        }
-                        update(() {
-                          saving = true;
-                          error = null;
-                        });
-                        final attemptStart = nextIndex;
-                        try {
-                          final bloc = locator<MealDetailBloc>();
-                          for (
-                            var index = nextIndex;
-                            index < meals.length;
-                            index++
-                          ) {
-                            await bloc.addIntake(
-                              dialogContext,
-                              units[index],
-                              convertQuantityToBaseUnit(
-                                parsed[index]!,
-                                units[index],
-                                meals[index],
-                              ).toString(),
-                              _mealType.getIntakeType(),
-                              meals[index],
-                              _day,
+              Semantics(
+                identifier: 'selected-foods-add',
+                child: FilledButton(
+                  onPressed: saving
+                      ? null
+                      : () async {
+                          final parsed = amounts
+                              .map(
+                                (c) => double.tryParse(
+                                  c.text.trim().replaceAll(',', '.'),
+                                ),
+                              )
+                              .toList();
+                          if (parsed
+                              .skip(nextIndex)
+                              .any(
+                                (value) =>
+                                    value == null ||
+                                    !value.isFinite ||
+                                    value <= 0,
+                              )) {
+                            update(
+                              () =>
+                                  error = S.of(context).enterPositiveAmountsLabel,
                             );
-                            // A committed intake must not be sent again, either
-                            // in this dialog or after closing and reopening it.
-                            nextIndex = index + 1;
-                            _selectedMeals.remove(keys[index]);
+                            return;
                           }
-                          _refreshLoggedDays(
-                            nextIndex - attemptStart,
-                            day: _day,
-                          );
-                          if (dialogContext.mounted) {
-                            Navigator.pop(dialogContext);
-                          }
-                          if (mounted) {
-                            setState(() {
-                              _selectedMeals.clear();
-                              _selectionMode = false;
+                          update(() {
+                            saving = true;
+                            error = null;
+                          });
+                          final attemptStart = nextIndex;
+                          try {
+                            final bloc = locator<MealDetailBloc>();
+                            for (
+                              var index = nextIndex;
+                              index < meals.length;
+                              index++
+                            ) {
+                              await bloc.addIntake(
+                                dialogContext,
+                                units[index],
+                                convertQuantityToBaseUnit(
+                                  parsed[index]!,
+                                  units[index],
+                                  meals[index],
+                                ).toString(),
+                                _mealType.getIntakeType(),
+                                meals[index],
+                                _day,
+                              );
+                              // A committed intake must not be sent again, either
+                              // in this dialog or after closing and reopening it.
+                              nextIndex = index + 1;
+                              _selectedMeals.remove(keys[index]);
+                            }
+                            _refreshLoggedDays(
+                              nextIndex - attemptStart,
+                              day: _day,
+                            );
+                            if (dialogContext.mounted) {
+                              Navigator.pop(dialogContext);
+                            }
+                            if (mounted) {
+                              setState(() {
+                                _selectedMeals.clear();
+                                _selectionMode = false;
+                              });
+                            }
+                          } catch (_) {
+                            final written = nextIndex - attemptStart;
+                            if (written > 0) {
+                              _refreshLoggedDays(written, day: _day);
+                              if (mounted) setState(() {});
+                            }
+                            if (!dialogContext.mounted || !mounted) return;
+                            update(() {
+                              saving = false;
+                              error = written > 0
+                                  ? S.of(context).selectedFoodsPartialFailureLabel
+                                  : S.of(context).logTrayLogFailedLabel;
                             });
                           }
-                        } catch (_) {
-                          final written = nextIndex - attemptStart;
-                          if (written > 0) {
-                            _refreshLoggedDays(written, day: _day);
-                            if (mounted) setState(() {});
-                          }
-                          if (!dialogContext.mounted || !mounted) return;
-                          update(() {
-                            saving = false;
-                            error = written > 0
-                                ? S.of(context).selectedFoodsPartialFailureLabel
-                                : S.of(context).logTrayLogFailedLabel;
-                          });
-                        }
-                      },
-                child: Text(S.of(context).addSelectedFoodsLabel),
+                        },
+                  child: Text(S.of(context).addSelectedFoodsLabel),
+                ),
               ),
             ],
           ),
