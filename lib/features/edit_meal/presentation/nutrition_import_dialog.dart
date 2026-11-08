@@ -490,7 +490,10 @@ class _NutritionImportDialogState extends State<NutritionImportDialog> {
                           column < _sources[sourceIndex].result.headings.length;
                           column++
                         )
-                          DropdownButtonFormField<String>(
+                          Semantics(
+                            identifier:
+                                'nutrition-source-$sourceIndex-column-$column',
+                            child: DropdownButtonFormField<String>(
                             key: ValueKey(
                               'source-$sourceIndex-column-$column-${_sources[sourceIndex].result.mapping[column]}',
                             ),
@@ -515,6 +518,7 @@ class _NutritionImportDialogState extends State<NutritionImportDialog> {
                             ],
                             onChanged: (field) =>
                                 _remapSource(sourceIndex, column, field),
+                          ),
                           ),
                       ],
                     if (_errors.isNotEmpty) ...[
