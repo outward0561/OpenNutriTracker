@@ -20,6 +20,9 @@ class TrendsLoaded extends TrendsState {
   final int windowDays; // effective span the charts plot over (resolved "All")
   final List<TrackedDayEntity> days; // tracked days over the selected window
   final List<TrackedDayEntity> priorWeek; // the 7 days before this week
+  // This week's days, for comparing with [priorWeek]: [days] covers less
+  // than a week under a 2-6 day window. Null reads this week from [days].
+  final List<TrackedDayEntity>? currentWeek;
   final List<WeightLogEntity> weight; // full weight history, windowed in the UI
   final BodyWeightUnit bodyWeightUnit;
   final double? targetWeightKg; // user's #119 target, for the chart reference
@@ -35,6 +38,7 @@ class TrendsLoaded extends TrendsState {
     required this.windowDays,
     required this.days,
     required this.priorWeek,
+    this.currentWeek,
     required this.weight,
     required this.bodyWeightUnit,
     required this.targetWeightKg,
@@ -51,6 +55,7 @@ class TrendsLoaded extends TrendsState {
     windowDays,
     days,
     priorWeek,
+    currentWeek,
     weight,
     bodyWeightUnit,
     targetWeightKg,

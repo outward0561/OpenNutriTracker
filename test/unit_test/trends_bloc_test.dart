@@ -229,6 +229,27 @@ void main() {
       },
     );
 
+    // PR #1491 review: a 2-6 day custom range compared under a week of days
+    // against the full prior week, showing a decline that was not there.
+    test('a window under a week still loads this whole week', () async {
+      trackedDay.result = [
+        TrackedDayEntity(day: today, calorieGoal: 2000, caloriesTracked: 2000),
+      ];
+      final emitted = await load(const LoadTrendsEvent(rangeDays: 2));
+      final state = emitted.last as TrendsLoaded;
+      expect(state.windowDays, 2);
+      expect(
+        trackedDay.rangeCalls.map((call) => call.start),
+        contains(today.subtract(const Duration(days: 6))),
+      );
+      expect(state.currentWeek, trackedDay.result);
+    });
+
+    test('a window of a week or more is this week too', () async {
+      await load(const LoadTrendsEvent(rangeDays: 30));
+      expect(trackedDay.rangeCalls, hasLength(2));
+    });
+
     test('a 90-day window pulls 90 days of calories', () async {
       final emitted = await load(const LoadTrendsEvent(rangeDays: 90));
       expect((emitted.last as TrendsLoaded).rangeDays, 90);

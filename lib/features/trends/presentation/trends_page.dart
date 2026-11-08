@@ -72,6 +72,7 @@ class _TrendsView extends StatelessWidget {
           children: [
             _StreakCard(
               days: state.days,
+              currentWeek: state.currentWeek ?? state.days,
               priorWeek: state.priorWeek,
               rangeDays: state.windowDays,
               palette: palette,
@@ -248,11 +249,13 @@ class _RangeSelector extends StatelessWidget {
 
 class _StreakCard extends StatelessWidget {
   final List<TrackedDayEntity> days;
+  final List<TrackedDayEntity> currentWeek;
   final List<TrackedDayEntity> priorWeek;
   final int rangeDays;
   final AppPalette palette;
   const _StreakCard({
     required this.days,
+    required this.currentWeek,
     required this.priorWeek,
     required this.rangeDays,
     required this.palette,
@@ -286,7 +289,10 @@ class _StreakCard extends StatelessWidget {
     // Suppress the chip when the prior week is empty — a new user with
     // no baseline would otherwise see a large green delta against 0.
     final priorOnTrack = priorWeek.where(onTrack).toList();
-    final thisWeek = onTrackDays
+    final thisWeek = <DateTime>{
+      for (final d in currentWeek)
+        if (onTrack(d)) DateTime(d.day.year, d.day.month, d.day.day),
+    }
         .where(
           (day) =>
               day.isAfter(weekStart.subtract(const Duration(days: 1))) &&

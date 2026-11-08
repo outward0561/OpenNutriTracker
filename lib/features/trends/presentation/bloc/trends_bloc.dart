@@ -69,6 +69,14 @@ class TrendsBloc extends Bloc<TrendsEvent, TrendsState> {
           today.subtract(const Duration(days: 13)),
           DateTime(now.year, now.month, now.day - 7, 23, 59, 59),
         );
+        // The week-over-week comparison needs all of this week, which a
+        // custom window of 2-6 days does not load.
+        final currentWeek = !isAll && fetchDays < 7
+            ? await _getTrackedDayUsecase.getTrackedDaysByRange(
+                today.subtract(const Duration(days: 6)),
+                endOfToday,
+              )
+            : days;
         final user = await _getUserUsecase.getUserData();
 
         // Water totalled per calendar day; the card fills missing days with 0.
@@ -118,6 +126,7 @@ class TrendsBloc extends Bloc<TrendsEvent, TrendsState> {
             windowDays: windowDays,
             days: days,
             priorWeek: priorWeek,
+            currentWeek: currentWeek,
             weight: weight,
             bodyWeightUnit: config.bodyWeightUnit,
             targetWeightKg: user.targetWeightKg,
