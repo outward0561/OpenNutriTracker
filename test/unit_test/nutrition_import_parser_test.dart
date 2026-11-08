@@ -439,4 +439,22 @@ Added Sugars 10 g
     );
     expect(consistent.issues, isEmpty);
   });
+
+  test('a file with headings but no foods says so', () {
+    expect(
+      NutritionImportParser.parseCsv('Name,Fat per 100 g').errors,
+      isNotEmpty,
+    );
+    expect(NutritionImportParser.parseJson('[]').errors, isNotEmpty);
+    expect(NutritionImportParser.parseJson('{"foods":[]}').errors, isNotEmpty);
+  });
+
+  test('a JSON object or list is not read as a nutrient value', () {
+    final parsed = NutritionImportParser.parseJson(
+      '[{"name":"Oats","basis":"per 100 g","fat":{"value":7}},'
+      '{"name":"Rice","basis":"per 100 g","fat":[1, 2]}]',
+    );
+    expect(parsed.entries, isEmpty);
+    expect(parsed.errors, isNotEmpty);
+  });
 }

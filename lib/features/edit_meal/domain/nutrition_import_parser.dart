@@ -673,6 +673,7 @@ class NutritionImportParser {
     )) {
       errors.add('Map at least one nutrient column.');
     }
+    if (records.length < 2) errors.add('The file has no food rows.');
     final entries = <NutritionEntry>[];
     for (var row = 1; row < records.length; row++) {
       final cells = records[row];
@@ -828,7 +829,7 @@ class NutritionImportParser {
       if (field != null) mapping[i] = field;
     }
     final entries = <NutritionEntry>[];
-    final errors = <String>[];
+    final errors = <String>[if (list.isEmpty) 'The file has no foods.'];
     for (var i = 0; i < list.length; i++) {
       if (list[i] is! Map) {
         errors.add('Entry ${i + 1}: expected an object.');
@@ -865,6 +866,12 @@ class NutritionImportParser {
         }
         final field = mapping[headings.indexOf(item.key)];
         if (field == null || item.value == null) continue;
+        // A nested object or list would be read through its toString().
+        if (item.value is Map || item.value is List) {
+          errors.add('Entry ${i + 1}: invalid $field.');
+          badEntry = true;
+          continue;
+        }
         final value = item.value.toString();
         if (field == 'name') {
           entry.name = value;
