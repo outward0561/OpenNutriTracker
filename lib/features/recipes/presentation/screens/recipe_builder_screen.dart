@@ -479,6 +479,9 @@ class _RecipeBuilderScreenState extends State<RecipeBuilderScreen> {
     for (var i = _bloc.state.ingredients.length - 1; i >= 0; i--) {
       _bloc.add(RemoveIngredientEvent(i));
     }
+    // The imported amounts set the weight: a typed total belongs to the
+    // ingredients being replaced.
+    _bloc.add(const ResetTotalWeightEvent());
     for (final entry in entries) {
       final values = entry.toPer100();
       final meal = MealEntity(

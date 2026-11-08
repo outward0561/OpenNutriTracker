@@ -286,4 +286,32 @@ void main() {
     expect(find.text('Oat Milk'), findsWidgets);
     expect(find.text(l10nEn.recipeNoIngredientsLabel), findsNothing);
   });
+
+  // PR #1491 review: replacing the ingredients kept a typed total weight, so
+  // the imported amounts never set the recipe's weight.
+  testWidgets('importing nutrition drops a typed total weight', (
+    tester,
+  ) async {
+    await pumpBuilder(tester, _soup(totalWeightG: 720));
+    expect(reset(), findsOneWidget);
+
+    await tester.tap(
+      find.bySemanticsIdentifier('recipe-builder-paste-nutrition'),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.bySemanticsIdentifier('nutrition-paste-text'),
+      'Oat Milk\nPer 100 g\nEnergy 60 kcal\nCarbs 6.6 g\nFat 3 g\nProtein 1 g',
+    );
+    await tester.tap(find.bySemanticsIdentifier('nutrition-parse-paste'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.bySemanticsIdentifier('nutrition-add-all-to-meal'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(l10nEn.nutritionReplaceAction));
+    await tester.pumpAndSettle();
+
+    expect(reset(), findsNothing);
+    final weight = tester.widget<TextField>(weightField());
+    expect(weight.controller!.text, '100');
+  });
 }
