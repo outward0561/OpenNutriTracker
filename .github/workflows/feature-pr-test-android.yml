@@ -48,6 +48,31 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
+      - name: Create stub environment for validation
+        uses: ./.github/actions/write-env-file
+        with:
+          sentry_dns: https://stub@sentry.io/0
+          supabase_project_url: https://stub.supabase.co
+          supabase_project_anon_key: ci-stub
+
+      - name: Install Flutter packages
+        run: flutter pub get
+
+      - name: Generate localizations
+        run: flutter gen-l10n
+
+      - name: Generate Dart sources
+        run: dart run build_runner build --delete-conflicting-outputs
+
+      - name: Analyze Flutter project
+        run: flutter analyze
+
+      - name: Test food search logic
+        run: >-
+          flutter test
+          test/unit_test/products_bloc_search_test.dart
+          test/unit_test/search_products_usecase_test.dart
+
       - name: Check required food database secrets
         env:
           SUPABASE_PROJECT_URL: ${{ secrets.SUPABASE_PROJECT_URL }}
@@ -58,20 +83,14 @@ jobs:
             exit 1
           fi
 
-      - name: Create environment for code generation and search
+      - name: Create environment for search-enabled APK
         uses: ./.github/actions/write-env-file
         with:
           sentry_dns: https://stub@sentry.io/0
           supabase_project_url: ${{ secrets.SUPABASE_PROJECT_URL }}
           supabase_project_anon_key: ${{ secrets.SUPABASE_PROJECT_ANON_KEY }}
 
-      - name: Install Flutter packages
-        run: flutter pub get
-
-      - name: Generate localizations
-        run: flutter gen-l10n
-
-      - name: Generate Dart sources
+      - name: Regenerate Dart sources with search credentials
         run: dart run build_runner build --delete-conflicting-outputs
 
       - name: Build feature PR-test debug APK
