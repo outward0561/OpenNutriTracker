@@ -48,12 +48,22 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
-      - name: Create stub environment for code generation
+      - name: Check required food database secrets
+        env:
+          SUPABASE_PROJECT_URL: ${{ secrets.SUPABASE_PROJECT_URL }}
+          SUPABASE_PROJECT_ANON_KEY: ${{ secrets.SUPABASE_PROJECT_ANON_KEY }}
+        run: |
+          if [[ -z "$SUPABASE_PROJECT_URL" || -z "$SUPABASE_PROJECT_ANON_KEY" ]]; then
+            echo "::error::Add SUPABASE_PROJECT_URL and SUPABASE_PROJECT_ANON_KEY under Settings > Secrets and variables > Actions to build a search-enabled APK."
+            exit 1
+          fi
+
+      - name: Create environment for code generation and search
         uses: ./.github/actions/write-env-file
         with:
           sentry_dns: https://stub@sentry.io/0
-          supabase_project_url: https://stub.supabase.co
-          supabase_project_anon_key: ci-stub
+          supabase_project_url: ${{ secrets.SUPABASE_PROJECT_URL }}
+          supabase_project_anon_key: ${{ secrets.SUPABASE_PROJECT_ANON_KEY }}
 
       - name: Install Flutter packages
         run: flutter pub get
