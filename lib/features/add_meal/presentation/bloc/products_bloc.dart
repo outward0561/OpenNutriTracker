@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:equatable/equatable.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:logging/logging.dart';
@@ -35,7 +33,7 @@ class ProductsBloc extends Bloc<ProductsEvent, ProductsState> {
   int _generation = 0;
 
   ProductsBloc(this._searchProductUseCase, this._getConfigUsecase)
-      : super(ProductsInitial()) {
+    : super(ProductsInitial()) {
     on<LoadProductsEvent>(
       (event, emit) => _loadProducts(event.searchString, emit, force: true),
     );
@@ -97,9 +95,10 @@ class ProductsBloc extends Bloc<ProductsEvent, ProductsState> {
       emit(ProductsLoadingState());
     }
     try {
-      final remote = _searchProductUseCase
-          .searchOFFProductsByString(searchString)
-          .timeout(searchRemoteDeadline);
+      final remote = _searchProductUseCase.searchOFFProductsByString(
+        searchString,
+        remoteTimeout: searchRemoteDeadline,
+      );
       final completedBeforePreview = await completedBeforeSearchPreview(remote);
       if (!completedBeforePreview) {
         final local = await _searchProductUseCase.searchOFFProductsByString(
@@ -120,20 +119,7 @@ class ProductsBloc extends Bloc<ProductsEvent, ProductsState> {
           }
         }
       }
-      SearchProductsResult result;
-      try {
-        result = await remote;
-      } on TimeoutException {
-        final local = await _searchProductUseCase.searchOFFProductsByString(
-          searchString,
-          skipRemote: true,
-        );
-        result = SearchProductsResult(
-          meals: local.meals,
-          remoteSourceEmpty: true,
-          remoteSourceFailed: true,
-        );
-      }
+      final result = await remote;
       final config = await _getConfigUsecase.getConfig();
       // Cancelled by a newer debounced event while awaiting: the emit below
       // would be a no-op, so this run must not register as completed. A
