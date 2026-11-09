@@ -94,6 +94,16 @@ android {
             applicationIdSuffix ".develop"
             versionNameSuffix "-develop"
         }
+        personal {
+            dimension "version"
+            applicationIdSuffix ".personal"
+            versionNameSuffix "-personal"
+        }
+        prtest {
+            dimension "version"
+            applicationIdSuffix ".prtest"
+            versionNameSuffix "-prtest"
+        }
         full {
             dimension "version"
         }
