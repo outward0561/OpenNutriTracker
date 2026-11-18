@@ -50,7 +50,10 @@ class _NutritionImportDialogState extends State<NutritionImportDialog> {
   /// switching foods reloads the checkbox from here. A basis change
   /// re-parses a food into a new entry, whose issues need a new review.
   final _reviewed = Set<NutritionEntry>.identity();
-  final _basisSizes = <int, Map<NutritionBasis, ({String size, String? unit})>>{};
+  // Keep raw text per food and basis, including incomplete or invalid edits.
+  // Validation still happens when the user applies or saves the entry.
+  final _basisEdits =
+      <int, Map<NutritionBasis, ({String size, String? unit, Map<String, String> values})>>{};
   String? _message;
   NutritionBasis _basis = NutritionBasis.unknown;
   String? _unit;
@@ -71,7 +74,7 @@ class _NutritionImportDialogState extends State<NutritionImportDialog> {
 
   void _showEntries(List<NutritionEntry> entries, List<String> errors) {
     _reviewed.clear();
-    _basisSizes.clear();
+    _basisEdits.clear();
     setState(() {
       _entries = entries;
       _errors = errors;
@@ -115,7 +118,9 @@ class _NutritionImportDialogState extends State<NutritionImportDialog> {
         ? null
         : double.tryParse(_size.text.trim().replaceAll(',', '.'));
     if (_size.text.trim().isNotEmpty &&
-        (entry.servingSize == null || entry.servingSize! <= 0)) {
+        (entry.servingSize == null ||
+            !entry.servingSize!.isFinite ||
+            entry.servingSize! <= 0)) {
       setState(() => _message = S.of(context).nutritionServingSizeInvalid);
       return false;
     }
@@ -170,23 +175,39 @@ class _NutritionImportDialogState extends State<NutritionImportDialog> {
       final errors = <String>[];
       _sources.clear();
       for (final selected in picked) {
-        if (selected.path == null) {
-          errors.add('${selected.name}: no readable file path.');
-          continue;
-        }
-        final content = await File(selected.path!).readAsString(encoding: utf8);
         final isJson = selected.name.toLowerCase().endsWith('.json');
-        final result = isJson
-            ? NutritionImportParser.parseJson(content)
-            : NutritionImportParser.parseCsv(content);
-        entries.addAll(result.entries);
-        errors.addAll(result.errors.map((error) => '${selected.name}: $error'));
-        _sources.add((
-          name: selected.name,
-          content: content,
-          json: isJson,
-          result: result,
-        ));
+        try {
+          if (selected.path == null) {
+            throw const FormatException('No readable file path.');
+          }
+          final content = await File(selected.path!).readAsString(
+            encoding: utf8,
+          );
+          final result = isJson
+              ? NutritionImportParser.parseJson(content)
+              : NutritionImportParser.parseCsv(content);
+          entries.addAll(result.entries);
+          errors.addAll(
+            result.errors.map((error) => '${selected.name}: $error'),
+          );
+          _sources.add((
+            name: selected.name,
+            content: content,
+            json: isJson,
+            result: result,
+          ));
+        } catch (error) {
+          if (!mounted) return;
+          final message = S.of(context).nutritionReadFileError(error.toString());
+          errors.add('${selected.name}: $message');
+          // Preserve failures alongside successful files when remapping.
+          _sources.add((
+            name: selected.name,
+            content: '',
+            json: isJson,
+            result: NutritionFileResult([], [message]),
+          ));
+        }
       }
       if (!mounted) return;
       _csvText = _sources.length == 1 && !_sources.single.json
@@ -257,7 +278,11 @@ class _NutritionImportDialogState extends State<NutritionImportDialog> {
 
   void _changeBasis(NutritionBasis basis) {
     if (_entries.isEmpty) return;
-    (_basisSizes[_index] ??= {})[_basis] = (size: _size.text, unit: _unit);
+    (_basisEdits[_index] ??= {})[_basis] = (
+      size: _size.text,
+      unit: _unit,
+      values: {for (final item in _values.entries) item.key: item.value.text},
+    );
     NutritionEntry parsed;
     if (_sources.length > 1) {
       var offset = 0;
@@ -306,12 +331,12 @@ class _NutritionImportDialogState extends State<NutritionImportDialog> {
     // Empty-basis file results still need their source row so switching back
     // can find the original food again.
     parsed.sourceRow ??= _current.sourceRow;
-    final savedSize = _basisSizes[_index]?[basis];
-    if (savedSize != null) {
+    final saved = _basisEdits[_index]?[basis];
+    if (saved != null) {
       parsed.servingSize = double.tryParse(
-        savedSize.size.trim().replaceAll(',', '.'),
+        saved.size.trim().replaceAll(',', '.'),
       );
-      parsed.servingUnit = savedSize.unit;
+      parsed.servingUnit = saved.unit;
     }
     if (!parsed.hasNutrients) {
       parsed.issues.add(
@@ -320,9 +345,12 @@ class _NutritionImportDialogState extends State<NutritionImportDialog> {
     }
     _entries[_index] = parsed;
     _load(_index);
-    if (savedSize != null) {
-      _size.text = savedSize.size;
-      setState(() => _unit = savedSize.unit);
+    if (saved != null) {
+      _size.text = saved.size;
+      for (final item in _values.entries) {
+        item.value.text = saved.values[item.key] ?? '';
+      }
+      setState(() => _unit = saved.unit);
     }
   }
 

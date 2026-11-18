@@ -140,6 +140,54 @@ void main() {
     expect(tester.widget<TextField>(input('kcal')).controller!.text, '200.0');
   });
 
+  testWidgets('changing basis preserves nutrient edits and validation', (
+    tester,
+  ) async {
+    List<NutritionEntry>? saved;
+    await open(tester, saveAll: (entries) async {
+      saved = entries;
+      return 'Saved';
+    });
+    await tester.enterText(
+      find.bySemanticsIdentifier('nutrition-paste-text'),
+      'Crackers\nPackage size: 200 g\n'
+      'Nutrient\tPer 100 g\tPer package\n'
+      'Energy\t100 kcal\t200 kcal\nProtein\t3 g\t6 g',
+    );
+    await tester.tap(find.bySemanticsIdentifier('nutrition-parse-paste'));
+    await tester.pumpAndSettle();
+    await show(tester, input('kcal'));
+    await tester.enterText(input('kcal'), '125.50');
+    await show(tester, input('protein'));
+    await tester.enterText(input('protein'), '6.2');
+
+    await changeBasis(tester, NutritionBasis.per100g, 'Package');
+    await show(tester, input('kcal'));
+    expect(tester.widget<TextField>(input('kcal')).controller!.text, '200.0');
+    await tester.enterText(input('kcal'), '250');
+    await show(tester, input('protein'));
+    await tester.enterText(input('protein'), 'invalid');
+    await changeBasis(tester, NutritionBasis.package, '100 g');
+    await show(tester, input('kcal'));
+    expect(tester.widget<TextField>(input('kcal')).controller!.text, '125.50');
+    await show(tester, input('protein'));
+    expect(tester.widget<TextField>(input('protein')).controller!.text, '6.2');
+
+    await changeBasis(tester, NutritionBasis.per100g, 'Package');
+    await show(tester, input('kcal'));
+    expect(tester.widget<TextField>(input('kcal')).controller!.text, '250');
+    await show(tester, input('protein'));
+    expect(tester.widget<TextField>(input('protein')).controller!.text, 'invalid');
+    await tester.tap(find.bySemanticsIdentifier('nutrition-save-all'));
+    await tester.pumpAndSettle();
+    expect(saved, isNull);
+    await tester.enterText(input('protein'), '7');
+    await tester.tap(find.bySemanticsIdentifier('nutrition-save-all'));
+    await tester.pumpAndSettle();
+    expect(saved!.single.toPer100()['kcal'], 125);
+    expect(saved!.single.toPer100()['protein'], 3.5);
+  });
+
   for (final files in [
     {'foods.csv': 'Name,Energy per 100 g\nOats,370'},
     {'foods.json': '[{"name":"Oats","energy per 100 g":370}]'},
@@ -182,4 +230,66 @@ void main() {
       expect(tester.widget<TextField>(input('kcal')).controller!.text, '370.0');
     });
   }
+
+  testWidgets('unreadable files do not discard valid file entries', (tester) async {
+    final directory = Directory.systemTemp.createTempSync('nutrition-failures-');
+    addTearDown(() => directory.deleteSync(recursive: true));
+    final first = File('${directory.path}/first.csv')
+      ..writeAsStringSync('Name,Energy per 100 g\nOats,370');
+    final unreadable = File('${directory.path}/missing.csv');
+    final invalid = File('${directory.path}/invalid.csv')
+      ..writeAsBytesSync([0xff, 0xfe]);
+    final second = File('${directory.path}/second.json')
+      ..writeAsStringSync('{"name":"Bread","energy_per_100g":250}');
+    final previous = FilePickerPlatform.instance;
+    FilePickerPlatform.instance = _Picker([
+      _PickedFile(first),
+      _PickedFile(unreadable),
+      _PickedFile(invalid),
+      _PickedFile(second),
+    ]);
+    addTearDown(() => FilePickerPlatform.instance = previous);
+    List<NutritionEntry>? saved;
+    await open(tester, saveAll: (entries) async {
+      saved = entries;
+      return 'Saved';
+    });
+    await tester.tap(find.bySemanticsIdentifier('nutrition-pick-file'));
+    for (var i = 0; i < 30; i++) {
+      await tester.runAsync(
+        () => Future<void>.delayed(const Duration(milliseconds: 20)),
+      );
+      await tester.pump();
+      if (find.textContaining('missing.csv:').evaluate().isNotEmpty &&
+          find.textContaining('invalid.csv:').evaluate().isNotEmpty) {
+        break;
+      }
+    }
+    await tester.pumpAndSettle();
+    expect(find.textContaining('missing.csv:'), findsOneWidget);
+    expect(find.textContaining('invalid.csv:'), findsOneWidget);
+    await tester.tap(find.bySemanticsIdentifier('nutrition-save-all'));
+    await tester.pumpAndSettle();
+    expect(saved?.map((entry) => entry.name), ['Oats', 'Bread']);
+  });
+
+  testWidgets('the preview refuses a nonfinite serving size', (tester) async {
+    var saved = false;
+    await open(tester, saveAll: (entries) async {
+      saved = true;
+      return 'Saved';
+    });
+    await tester.enterText(
+      find.bySemanticsIdentifier('nutrition-paste-text'),
+      'Milk\nPer serving\nServing size: 50 g\nCalories: 100 kcal',
+    );
+    await tester.tap(find.bySemanticsIdentifier('nutrition-parse-paste'));
+    await tester.pumpAndSettle();
+    await show(tester, input('serving-size'));
+    await tester.enterText(input('serving-size'), 'NaN');
+    await tester.tap(find.bySemanticsIdentifier('nutrition-save-all'));
+    await tester.pumpAndSettle();
+    expect(saved, isFalse);
+    expect(find.text(S.of(tester.element(input('serving-size'))).nutritionServingSizeInvalid), findsOneWidget);
+  });
 }
