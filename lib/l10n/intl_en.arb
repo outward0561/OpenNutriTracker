@@ -1631,6 +1631,7 @@
   "diaryKeepOriginalMealsLabel": "Keep original meals",
   "diaryMoveLabel": "Move",
   "diaryTransferSuccessLabel": "Diary entries updated.",
+  "diaryTransferSourceChanged": "The source entry changed after it was copied.",
   "diaryTransferFailedLabel": "Transfer stopped: {error}. Check both dates before retrying; some entries may have changed.",
   "@diaryTransferFailedLabel": {"placeholders": {"error": {"type": "String"}}},
   "diaryChooseDifferentDayLabel": "Choose a different day to move entries."

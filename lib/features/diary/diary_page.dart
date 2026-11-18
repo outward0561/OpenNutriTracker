@@ -1,6 +1,10 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:logging/logging.dart';
+import 'package:opennutritracker/core/data/data_source/user_activity_dbo.dart';
+import 'package:opennutritracker/core/data/dbo/intake_dbo.dart';
 import 'package:opennutritracker/core/domain/entity/intake_entity.dart';
 import 'package:opennutritracker/core/domain/entity/intake_type_entity.dart';
 import 'package:opennutritracker/core/domain/entity/tracked_day_entity.dart';
@@ -10,12 +14,14 @@ import 'package:opennutritracker/core/presentation/widgets/edit_dialog.dart';
 import 'package:opennutritracker/core/styles/dimens.dart';
 import 'package:opennutritracker/core/utils/calc/met_calc.dart';
 import 'package:opennutritracker/core/domain/usecase/get_user_usecase.dart';
+import 'package:opennutritracker/core/domain/usecase/get_profiles_usecase.dart';
 import 'package:opennutritracker/features/activity_detail/presentation/bloc/activity_detail_bloc.dart';
 import 'package:opennutritracker/core/utils/locator.dart';
 import 'package:opennutritracker/features/add_meal/presentation/add_meal_type.dart';
 import 'package:opennutritracker/features/diary/presentation/bloc/calendar_day_bloc.dart';
 import 'package:opennutritracker/features/diary/presentation/bloc/diary_bloc.dart';
 import 'package:opennutritracker/features/diary/presentation/diary_transfer_guard.dart';
+import 'package:opennutritracker/features/diary/presentation/diary_transfer_progress.dart';
 import 'package:opennutritracker/features/diary/presentation/widgets/diary_table_calendar.dart';
 import 'package:opennutritracker/features/diary/presentation/widgets/day_info_widget.dart';
 import 'package:opennutritracker/features/diary/presentation/widgets/diary_transfer_dialog.dart';
@@ -38,6 +44,7 @@ class _DiaryPageState extends State<DiaryPage> with WidgetsBindingObserver {
   late ActivityDetailBloc _activityDetailBloc;
   // The page can be recreated while a write is still in flight.
   static final _transferGuard = DiaryTransferGuard();
+  static final _transferProgress = DiaryTransferProgress();
 
   // #292: Extended from 356 days (~1 year) to 5 years so old entries are never truncated
   static const _calendarDurationDays = Duration(days: 365 * 5);
@@ -353,6 +360,46 @@ class _DiaryPageState extends State<DiaryPage> with WidgetsBindingObserver {
     await _transferGuard.run(transfer);
   }
 
+  String _transferErrorMessage(Object error) =>
+      error is DiaryTransferSourceChanged
+          ? S.of(context).diaryTransferSourceChanged
+          : error.toString();
+
+  String _transferKey(
+    DateTime sourceDay,
+    DiaryTransferChoice choice,
+    String scope,
+  ) => jsonEncode([
+    locator<GetProfilesUsecase>().activeProfileId,
+    DateUtils.dateOnly(sourceDay).toIso8601String(),
+    DateUtils.dateOnly(choice.date).toIso8601String(),
+    choice.mealType?.name,
+    choice.move,
+    scope,
+  ]);
+
+  Future<void> _copyIntakeOnce(
+    String transferKey,
+    IntakeEntity intake,
+    DiaryTransferChoice choice,
+  ) => _transferProgress.copyOnce(
+    transferKey,
+    'food:${intake.id}',
+    DiaryTransferProgress.snapshot(IntakeDBO.fromIntakeEntity(intake)),
+    () => _copyIntakeTo(intake, choice),
+  );
+
+  Future<void> _copyActivityOnce(
+    String transferKey,
+    UserActivityEntity activity,
+    DiaryTransferChoice choice,
+  ) => _transferProgress.copyOnce(
+    transferKey,
+    'activity:${activity.id}',
+    DiaryTransferProgress.snapshot(UserActivityDBO.fromUserActivityEntity(activity)),
+    () => _copyActivityTo(activity, choice),
+  );
+
   void _refreshTransfers() {
     _diaryBloc.add(const LoadDiaryYearEvent());
     _calendarDayBloc.add(LoadCalendarDayEvent(_selectedDate));
@@ -404,11 +451,15 @@ class _DiaryPageState extends State<DiaryPage> with WidgetsBindingObserver {
     final sourceDay = _selectedDate;
     final choice = await _chooseTransfer(type: intake.type);
     if (choice == null || !mounted) return;
+    final key = _transferKey(sourceDay, choice, 'food:${intake.id}');
     try {
-      await _copyIntakeTo(intake, choice);
-      if (choice.move && mounted) {
-        await _calendarDayBloc.deleteIntakeItem(context, intake, sourceDay);
-      }
+      await _copyIntakeOnce(key, intake, choice);
+      await _transferProgress.finish(key, () async {
+        if (choice.move) {
+          if (!mounted) throw StateError('Diary closed before transfer');
+          await _calendarDayBloc.deleteIntakeItem(context, intake, sourceDay);
+        }
+      });
       _refreshTransfers();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -419,7 +470,9 @@ class _DiaryPageState extends State<DiaryPage> with WidgetsBindingObserver {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(S.of(context).diaryTransferFailedLabel(e.toString())),
+            content: Text(
+              S.of(context).diaryTransferFailedLabel(_transferErrorMessage(e)),
+            ),
           ),
         );
       }
@@ -430,15 +483,19 @@ class _DiaryPageState extends State<DiaryPage> with WidgetsBindingObserver {
     final sourceDay = _selectedDate;
     final choice = await _chooseTransfer(includesFoods: false);
     if (choice == null || !mounted) return;
+    final key = _transferKey(sourceDay, choice, 'activity:${activity.id}');
     try {
-      await _copyActivityTo(activity, choice);
-      if (choice.move && mounted) {
-        await _calendarDayBloc.deleteUserActivityItem(
-          context,
-          activity,
-          sourceDay,
-        );
-      }
+      await _copyActivityOnce(key, activity, choice);
+      await _transferProgress.finish(key, () async {
+        if (choice.move) {
+          if (!mounted) throw StateError('Diary closed before transfer');
+          await _calendarDayBloc.deleteUserActivityItem(
+            context,
+            activity,
+            sourceDay,
+          );
+        }
+      });
       _refreshTransfers();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -449,7 +506,9 @@ class _DiaryPageState extends State<DiaryPage> with WidgetsBindingObserver {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(S.of(context).diaryTransferFailedLabel(e.toString())),
+            content: Text(
+              S.of(context).diaryTransferFailedLabel(_transferErrorMessage(e)),
+            ),
           ),
         );
       }
@@ -469,27 +528,30 @@ class _DiaryPageState extends State<DiaryPage> with WidgetsBindingObserver {
       );
       return;
     }
+    final key = _transferKey(sourceDay, choice, 'day');
     try {
       for (final intake in intakes) {
-        await _copyIntakeTo(intake, choice);
+        await _copyIntakeOnce(key, intake, choice);
       }
       for (final activity in activities) {
-        await _copyActivityTo(activity, choice);
+        await _copyActivityOnce(key, activity, choice);
       }
-      if (choice.move) {
-        for (final intake in intakes) {
-          if (!mounted) throw StateError('Diary closed before transfer');
-          await _calendarDayBloc.deleteIntakeItem(context, intake, sourceDay);
+      await _transferProgress.finish(key, () async {
+        if (choice.move) {
+          for (final intake in intakes) {
+            if (!mounted) throw StateError('Diary closed before transfer');
+            await _calendarDayBloc.deleteIntakeItem(context, intake, sourceDay);
+          }
+          for (final activity in activities) {
+            if (!mounted) throw StateError('Diary closed before transfer');
+            await _calendarDayBloc.deleteUserActivityItem(
+              context,
+              activity,
+              sourceDay,
+            );
+          }
         }
-        for (final activity in activities) {
-          if (!mounted) throw StateError('Diary closed before transfer');
-          await _calendarDayBloc.deleteUserActivityItem(
-            context,
-            activity,
-            sourceDay,
-          );
-        }
-      }
+      });
       _refreshTransfers();
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -501,7 +563,9 @@ class _DiaryPageState extends State<DiaryPage> with WidgetsBindingObserver {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(S.of(context).diaryTransferFailedLabel(e.toString())),
+            content: Text(
+              S.of(context).diaryTransferFailedLabel(_transferErrorMessage(e)),
+            ),
           ),
         );
       }
