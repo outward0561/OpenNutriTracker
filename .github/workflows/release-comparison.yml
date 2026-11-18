@@ -34,6 +34,16 @@ jobs:
         with:
           flutter-version: ${{ steps.flutter_version.outputs.version }}
 
+      - name: Cache Gradle
+        uses: actions/cache@v6
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('android/**/*.gradle*', 'android/**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
       - name: Check repository food database configuration
         id: backend
         env:
@@ -176,12 +186,12 @@ jobs:
           tools=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)
           "$tools" verify "$apk"
           "${tools%/*}/aapt" dump badging "$apk" > "$RUNNER_TEMP/apk-badging.txt"
-          if rg -q '^application-debuggable' "$RUNNER_TEMP/apk-badging.txt"; then
+          if grep -q '^application-debuggable' "$RUNNER_TEMP/apk-badging.txt"; then
             echo "::error::The APK manifest marks this app as debuggable."
             exit 1
           fi
           unzip -Z1 "$apk" > "$RUNNER_TEMP/apk-files.txt"
-          rg -q '^lib/arm64-v8a/libapp\.so$' "$RUNNER_TEMP/apk-files.txt"
+          grep -q '^lib/arm64-v8a/libapp\.so$' "$RUNNER_TEMP/apk-files.txt"
           cp "$apk" "$RUNNER_TEMP/OpenNutriTracker-ARM64-Release.apk"
 
       - name: Upload release APK
