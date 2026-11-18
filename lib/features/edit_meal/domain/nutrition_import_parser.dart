@@ -340,7 +340,797 @@ class NutritionImportParser {
     // Parsing a prefix would silently turn `1/2 g` into 1 g or
     // `100 / 200 kcal` into 100 kcal.
     final match = RegExp(
-      '^\\s*($_numberPattern)\\s*([a-zA-Zµμ%]+)?\\s*\$',
+      '^\\s*($_numberPattern)\\s*([a-zA-Zµμ%]+)?\\s*(?:\\(\\s*$_numberPattern\\s*%\\s*\\))?\\s*\
+    ).firstMatch(raw);
+    if (match == null) return null;
+    final value = _toDouble(match[1]!);
+    if (value == null || !value.isFinite || value < 0) return null;
+    final unit = match[2]?.toLowerCase();
+    if (unit == '%') return null;
+    if (field == 'kcal' || field == 'kj') {
+      if (unit == null) return (field, value);
+      if (unit == 'kcal' || unit == 'kj') return (unit, value);
+      return null;
+    }
+    if (field == 'sodium' ||
+        field == 'calcium' ||
+        field == 'iron' ||
+        field == 'potassium' ||
+        field == 'magnesium') {
+      if (unit == 'g') return (field, value * 1000);
+      if (unit == 'µg' || unit == 'μg' || unit == 'ug' || unit == 'mcg') {
+        return (field, value / 1000);
+      }
+      if (unit == null || unit == 'mg') return (field, value);
+      return null;
+    }
+    if (field == 'vitaminD' || field == 'vitaminB12') {
+      if (unit == 'g') return (field, value * 1000000);
+      if (unit == 'mg') return (field, value * 1000);
+      if (unit == null ||
+          unit == 'µg' ||
+          unit == 'μg' ||
+          unit == 'ug' ||
+          unit == 'mcg') {
+        return (field, value);
+      }
+      return null;
+    }
+    if (unit != null && unit != 'g') return null;
+    return (field, value);
+  }
+
+  static String? fieldFor(String heading) {
+    final s = heading.toLowerCase().replaceAll(RegExp(r'[_-]+'), ' ').trim();
+    if (RegExp(r'%|\bdaily\s+value\b|\bdv\b').hasMatch(s)) return null;
+    // Subtypes the app does not store; without this their trailing "fat" or
+    // "sugars" would land on, and overwrite, the total.
+    if (RegExp(
+      r'\btrans\b|\b(?:mono|poly)\s*unsaturat|\bunsaturat|\badded\s+sugars?\b|\bsugar\s+alcohols?\b|\bpolyols?\b',
+    ).hasMatch(s)) {
+      return null;
+    }
+    if (RegExp(r'\b(brand|manufacturer)\b').hasMatch(s)) return 'brand';
+    if (RegExp(r'\b(serving|portion|package)\s*unit\b').hasMatch(s)) {
+      return 'servingUnit';
+    }
+    if (RegExp(r'\b(name|food|product|description)\b').hasMatch(s) &&
+        !_nutrient.hasMatch(s)) {
+      return 'name';
+    }
+    if (RegExp(
+          r'\b(serving|portion|package)\s*(size|quantity|amount)?\b',
+        ).hasMatch(s) &&
+        !_nutrient.hasMatch(s)) {
+      return 'servingSize';
+    }
+    if (RegExp(r'\b(saturat\w*|sat)\b').hasMatch(s)) {
+      return 'saturatedFat';
+    }
+    if (RegExp(r'\b(sugar|sugars)\b').hasMatch(s)) return 'sugars';
+    if (RegExp(r'\bcalcium\b').hasMatch(s)) return 'calcium';
+    if (RegExp(r'\biron\b').hasMatch(s)) return 'iron';
+    if (RegExp(r'\bpotassium\b').hasMatch(s)) return 'potassium';
+    if (RegExp(r'\bmagnesium\b').hasMatch(s)) return 'magnesium';
+    if (RegExp(r'\bvitamin\s*d\b').hasMatch(s)) return 'vitaminD';
+    if (RegExp(r'\bvitamin\s*b12\b').hasMatch(s)) return 'vitaminB12';
+    if (RegExp(r'\b(sodium)\b').hasMatch(s)) return 'sodium';
+    if (RegExp(r'\b(salt)\b').hasMatch(s)) return 'salt';
+    if (RegExp(r'\b(fibre|fiber)\b').hasMatch(s)) return 'fiber';
+    if (RegExp(r'\b(protein|proteins)\b').hasMatch(s)) return 'protein';
+    if (RegExp(r'\b(carbs?|carbohydrates?)\b').hasMatch(s)) return 'carbs';
+    if (RegExp(r'\b(fat|lipids?)\b').hasMatch(s)) return 'fat';
+    if (RegExp(r'\b(kilojoules?|kj)\b').hasMatch(s)) return 'kj';
+    if (RegExp(r'\b(calories?|kcal|kilocalories?)\b').hasMatch(s)) {
+      return 'kcal';
+    }
+    if (RegExp(r'\benergy\b').hasMatch(s)) {
+      if (s.contains('kj')) return 'kj';
+      return 'kcal';
+    }
+    return null;
+  }
+
+  static NutritionBasis _basis(String text) {
+    final normalized = text.replaceAll('_', ' ').replaceAll('-', ' ');
+    final hundred = _per100.firstMatch(normalized);
+    if (hundred != null) {
+      return hundred[1]!.toLowerCase() == 'ml'
+          ? NutritionBasis.per100ml
+          : NutritionBasis.per100g;
+    }
+    if (RegExp(
+      r'\bper\s+serving\b',
+      caseSensitive: false,
+    ).hasMatch(normalized)) {
+      return NutritionBasis.serving;
+    }
+    if (RegExp(
+      r'\bper\s+portion\b',
+      caseSensitive: false,
+    ).hasMatch(normalized)) {
+      return NutritionBasis.portion;
+    }
+    if (RegExp(
+      r'\bper\s+package\b',
+      caseSensitive: false,
+    ).hasMatch(normalized)) {
+      return NutritionBasis.package;
+    }
+    return NutritionBasis.unknown;
+  }
+
+  /// File size and unit headings describe their own quantity, not the
+  /// nutrient column. Keep package, portion and serving values distinct.
+  static NutritionBasis? _fileSizeBasis(String heading) {
+    final normalized = heading.replaceAll(RegExp(r'[_-]+'), ' ');
+    final match = RegExp(
+      r'\b(serving|portion|package)\b',
+      caseSensitive: false,
+    ).firstMatch(normalized);
+    return switch (match?.group(1)?.toLowerCase()) {
+      'serving' => NutritionBasis.serving,
+      'portion' => NutritionBasis.portion,
+      'package' => NutritionBasis.package,
+      _ => null,
+    };
+  }
+
+  static void _assignFileSize(
+    NutritionEntry entry,
+    List<({String heading, String field, String value})> columns,
+  ) {
+    final wanted = switch (entry.basis) {
+      NutritionBasis.serving => NutritionBasis.serving,
+      NutritionBasis.portion => NutritionBasis.portion,
+      NutritionBasis.package => NutritionBasis.package,
+      _ => NutritionBasis.serving,
+    };
+    final specific = columns.where(
+      (column) => _fileSizeBasis(column.heading) == wanted,
+    ).toList();
+    final candidates = [
+      ...specific,
+      ...columns.where(
+        (column) =>
+            _fileSizeBasis(column.heading) == null &&
+            !specific.any((item) => item.field == column.field),
+      ),
+    ];
+    final sizes = <(double, String?)>[];
+    final units = <String>{};
+    var invalid = false;
+    for (final column in candidates) {
+      final raw = column.value.trim();
+      if (raw.isEmpty) continue;
+      if (column.field == 'servingUnit') {
+        final unit = raw.toLowerCase();
+        if (unit == 'g' || unit == 'ml') {
+          units.add(unit);
+        } else {
+          invalid = true;
+        }
+        continue;
+      }
+      final metric = RegExp(
+        '(?<![a-zA-Z0-9.,])($_numberPattern)\\s*(g|ml)\\b',
+        caseSensitive: false,
+      ).allMatches(raw).toList();
+      if (metric.isNotEmpty) {
+        for (final match in metric) {
+          final before = raw.substring(0, match.start);
+          final after = raw.substring(match.end);
+          // The unit can describe one item rather than the whole serving.
+          // Do not silently read 1/2 g as 2 g or 2 x 50 g as 50 g.
+          if (RegExp(
+                r'\d\s*(?:/|[x×*]|times)\s*$',
+                caseSensitive: false,
+              ).hasMatch(before) ||
+              RegExp(
+                r'^[\s()]*(?:each|per\s+\w+)\b',
+                caseSensitive: false,
+              ).hasMatch(after)) {
+            invalid = true;
+            continue;
+          }
+          final size = _toDouble(match[1]!);
+          if (size == null || !size.isFinite || size < 0) {
+            invalid = true;
+          } else {
+            sizes.add((size, match[2]!.toLowerCase()));
+          }
+        }
+      } else if (RegExp('^\\s*$_numberPattern\\s*\$').hasMatch(raw)) {
+        final size = parseNumber(raw);
+        final unit = headingUnit(column.heading);
+        if (size == null ||
+            !size.isFinite ||
+            (unit != null && unit != 'g' && unit != 'ml')) {
+          invalid = true;
+        } else {
+          sizes.add((size, unit));
+        }
+      } else {
+        invalid = true;
+      }
+    }
+    final amounts = sizes.map((size) => size.$1).toSet();
+    units.addAll(sizes.map((size) => size.$2).whereType<String>());
+    if (invalid || amounts.length > 1 || units.length > 1) {
+      entry.issues.add(
+        'Ambiguous or unsupported serving size; enter a size in g or ml.',
+      );
+      return;
+    }
+    entry.servingSize = amounts.isEmpty ? null : amounts.single;
+    entry.servingUnit = units.isEmpty ? null : units.single;
+  }
+
+  static NutritionEntry parseText(
+    String text, {
+    NutritionBasis? selectedBasis,
+  }) {
+    final entry = NutritionEntry();
+    final lines = text
+        .replaceAll('\r', '')
+        .split('\n')
+        .where((l) => l.trim().isNotEmpty)
+        .toList();
+    // Each kind of size the label gives; the basis picks one below.
+    final sizes = <String, (double?, String?)>{};
+    for (final match in _serving.allMatches(text)) {
+      final kind = (match[1] ?? match[2])!.toLowerCase();
+      sizes.putIfAbsent(
+        kind,
+        () => (parseNumber(match[3]!), match[4]!.toLowerCase()),
+      );
+    }
+    final sizeColumns =
+        <String, List<({String heading, String field, String value})>>{};
+    for (final match in RegExp(
+      r'^(serving|portion|package)\s*size\s*[:\t]\s*([^\r\n]+)',
+      caseSensitive: false,
+      multiLine: true,
+    ).allMatches(text)) {
+      final kind = match[1]!.toLowerCase();
+      (sizeColumns[kind] ??= []).add((
+        heading: '$kind size',
+        field: 'servingSize',
+        value: match[2]!,
+      ));
+    }
+    final sizeIssues = <String, List<String>>{};
+    for (final item in sizeColumns.entries) {
+      final probe = NutritionEntry(
+        basis: switch (item.key) {
+          'portion' => NutritionBasis.portion,
+          'package' => NutritionBasis.package,
+          _ => NutritionBasis.serving,
+        },
+      );
+      _assignFileSize(probe, item.value);
+      if (probe.issues.isNotEmpty) {
+        sizes.remove(item.key);
+        sizeIssues[item.key] = probe.issues;
+      } else {
+        sizes[item.key] = (probe.servingSize, probe.servingUnit);
+      }
+    }
+    final explicitUnits = <String, String>{};
+    for (final match in RegExp(
+      r'^(serving|portion|package)\s*unit\s*[:\t]\s*(g|ml)\s*$',
+      caseSensitive: false,
+      multiLine: true,
+    ).allMatches(text)) {
+      explicitUnits[match[1]!.toLowerCase()] = match[2]!.toLowerCase();
+    }
+    final basisHints = <NutritionBasis>[];
+    for (final line in lines) {
+      for (final cell in line.split('\t')) {
+        final b = _basis(cell);
+        if (b != NutritionBasis.unknown && !basisHints.contains(b)) {
+          basisHints.add(b);
+        }
+      }
+    }
+    final preferred =
+        selectedBasis ??
+        (basisHints.contains(NutritionBasis.per100g)
+            ? NutritionBasis.per100g
+            : basisHints.contains(NutritionBasis.per100ml)
+            ? NutritionBasis.per100ml
+            : basisHints.length == 1
+            ? basisHints.first
+            : NutritionBasis.unknown);
+    entry.basis = preferred;
+    var sizeKind = switch (preferred) {
+      NutritionBasis.portion => 'portion',
+      NutritionBasis.package => 'package',
+      _ => 'serving',
+    };
+    // Per-100 labels may also describe a default serving. A per-package,
+    // portion, or serving value must use that basis's own size.
+    if ((preferred == NutritionBasis.per100g ||
+            preferred == NutritionBasis.per100ml ||
+            preferred == NutritionBasis.unknown) &&
+        !sizes.containsKey(sizeKind)) {
+      if (sizes.containsKey('portion')) {
+        sizeKind = 'portion';
+      } else if (sizes.containsKey('package')) {
+        sizeKind = 'package';
+      }
+    }
+    final size = sizes[sizeKind];
+    entry.issues.addAll(sizeIssues[sizeKind] ?? const []);
+    if (size != null) {
+      entry.servingSize = size.$1;
+      entry.servingUnit = size.$2;
+    }
+    entry.servingUnit = explicitUnits[sizeKind] ?? entry.servingUnit;
+    if (selectedBasis != null &&
+        basisHints.length == 1 &&
+        selectedBasis != basisHints.first) {
+      entry.issues.add('No values in the selected nutrition column.');
+      return entry;
+    }
+    if (basisHints.length > 1 && preferred == NutritionBasis.unknown) {
+      entry.issues.add('Choose a nutrition column before importing.');
+    }
+    if (preferred == NutritionBasis.unknown) {
+      entry.issues.add(
+        'Choose whether values are per 100 g, per 100 ml or per serving.',
+      );
+    }
+    var activeBasis = NutritionBasis.unknown;
+    for (var lineIndex = 0; lineIndex < lines.length; lineIndex++) {
+      final line = lines[lineIndex];
+      final lineBasis = _basis(line);
+      if (!line.contains('\t') && lineBasis != NutritionBasis.unknown) {
+        activeBasis = lineBasis;
+      }
+      final trimmed = line.trim();
+      final brand = RegExp(
+        r'^brand\s*[:\t]\s*(.+)$',
+        caseSensitive: false,
+      ).firstMatch(trimmed);
+      if (brand != null) {
+        entry.brand = brand[1]!.trim();
+        continue;
+      }
+      final name = RegExp(
+        r'^(?:food|product|name)\s*[:\t]\s*(.+)$',
+        caseSensitive: false,
+      ).firstMatch(trimmed);
+      if (name != null) {
+        entry.name = name[1]!.trim();
+        continue;
+      }
+      final cells = line.split('\t').map((cell) => cell.trim()).toList();
+      final matches = _nutrient.allMatches(cells.first).toList();
+      if (!line.contains('\t') &&
+          activeBasis != NutritionBasis.unknown &&
+          activeBasis != preferred) {
+        continue;
+      }
+      if (matches.isEmpty) {
+        if (entry.name.isEmpty &&
+            _basis(trimmed) == NutritionBasis.unknown &&
+            !RegExp(
+              r'\b(serving|portion|nutrition|amount|daily value|%dv)\b',
+              caseSensitive: false,
+            ).hasMatch(trimmed) &&
+            !RegExp(r'^\d').hasMatch(trimmed)) {
+          entry.name = trimmed;
+        }
+        continue;
+      }
+      // A copied table may have a heading row followed by nutrient rows.
+      final selectedCell = cells.length > 1 && matches.isNotEmpty
+          ? _selectedTableCell(
+              lines,
+              lineIndex,
+              cells,
+              preferred,
+              matches.first.group(0)!,
+              entry.issues,
+            )
+          : null;
+      if (cells.length > 1 && selectedCell == null) continue;
+      for (var i = 0; i < matches.length; i++) {
+        final match = matches[i];
+        final label = match.group(0)!;
+        var field = fieldFor(label);
+        final rawTail = cells.length > 1
+            ? selectedCell!
+            : line.substring(
+                match.end,
+                i + 1 < matches.length ? matches[i + 1].start : line.length,
+              );
+        final firstNumber = _number.firstMatch(rawTail);
+        final heading = cells.length > 1
+            ? cells.first
+            : rawTail.substring(0, firstNumber?.start ?? rawTail.length);
+        final rowUnits = _headingUnits(heading).toSet();
+        final suffix = firstNumber == null
+            ? ''
+            : rawTail.substring(firstNumber.end).trimLeft();
+        if (rowUnits.length > 1 &&
+            !RegExp(r'^[a-zA-Zµμ%]').hasMatch(suffix)) {
+          entry.issues.add(
+            'Ambiguous units for $label; enter the correct value in the preview.',
+          );
+          continue;
+        }
+        final tail = _withHeadingUnit(rawTail, headingUnit(heading));
+        if (field == 'kcal' &&
+            RegExp(
+              r'^\s*[:;]?\s*\d+(?:[.,]\d+)?\s*kj\b',
+              caseSensitive: false,
+            ).hasMatch(tail)) {
+          field = 'kj';
+        }
+        final candidates = _number
+            .allMatches(tail)
+            .where(
+              (number) =>
+                  !RegExp(r'^\s*%').hasMatch(tail.substring(number.end)),
+            )
+            .toList();
+        if (candidates.isEmpty || field == null) continue;
+        if (candidates.length > 1 && (field == 'kcal' || field == 'kj')) {
+          final energyValues = RegExp(
+            '($_numberPattern)\\s*(kcal|kj)\\b',
+            caseSensitive: false,
+          ).allMatches(tail).toList();
+          if (energyValues.length == 2 &&
+              candidates.length == 2 &&
+              energyValues[0][2]!.toLowerCase() !=
+                  energyValues[1][2]!.toLowerCase()) {
+            final values = [
+              for (final energy in energyValues)
+                _toDouble(energy[1]!),
+            ];
+            if (values.any(
+              (value) => value == null || !value.isFinite || value < 0,
+            )) {
+              entry.issues.add('Invalid value for $label.');
+              continue;
+            }
+            for (
+              var energyIndex = 0;
+              energyIndex < energyValues.length;
+              energyIndex++
+            ) {
+              entry.values[energyValues[energyIndex][2]!.toLowerCase()] =
+                  values[energyIndex];
+            }
+            continue;
+          }
+        }
+        if (candidates.length > 1) {
+          entry.issues.add(
+            'Ambiguous values for $label; enter the correct value in the preview.',
+          );
+          continue;
+        }
+        final candidate = candidates.single;
+        final value = _toDouble(candidate[1]!);
+        if (value == null || !value.isFinite || value < 0) {
+          entry.issues.add('Invalid value for $label.');
+          continue;
+        }
+        final after = tail.substring(candidate.end).trimLeft();
+        final unit = _unit.firstMatch(after)?.group(1)?.toLowerCase();
+        if (unit == null && RegExp(r'^[a-zA-Zµμ]+').hasMatch(after)) {
+          entry.issues.add(
+            'Unsupported unit for $label: ${RegExp(r'^[a-zA-Zµμ]+').firstMatch(after)!.group(0)}.',
+          );
+          continue;
+        }
+        if (field == 'kcal' && unit == 'kj') field = 'kj';
+        if (field == 'kj' && unit == 'kcal') field = 'kcal';
+        if (field == 'sodium' ||
+            field == 'calcium' ||
+            field == 'iron' ||
+            field == 'potassium' ||
+            field == 'magnesium' ||
+            field == 'vitaminD' ||
+            field == 'vitaminB12') {
+          final nutrient = parseNutrientCell(field, '$value ${unit ?? ''}');
+          if (nutrient == null) {
+            entry.issues.add('Unsupported unit for $label: $unit.');
+          } else {
+            entry.values[nutrient.$1] = nutrient.$2;
+          }
+        } else if (field == 'salt' || (field != 'kcal' && field != 'kj')) {
+          if (unit != null && unit != 'g') {
+            entry.issues.add('Unsupported unit for $label: $unit.');
+          } else {
+            entry.values[field] = value;
+          }
+        } else {
+          entry.values[field] = value;
+        }
+      }
+    }
+    if (!entry.hasNutrients) {
+      entry.issues.add('No nutritional values recognised.');
+    }
+    _checkEnergy(entry);
+    return entry;
+  }
+
+  static NutritionFileResult parseCsv(
+    String text, {
+    Map<int, String>? manualMapping,
+    NutritionBasis? selectedBasis,
+  }) {
+    if (text.trim().isEmpty) {
+      return NutritionFileResult([], ['The file is empty.']);
+    }
+    final delimiter = [',', ';', '\t'].reduce(
+      (a, b) =>
+          _csvRecords(text, a).first.length >= _csvRecords(text, b).first.length
+          ? a
+          : b,
+    );
+    final records = _csvRecords(text, delimiter);
+    if (records.isEmpty) return NutritionFileResult([], ['The file is empty.']);
+    final headings = records.first;
+    final mapping = <int, String>{};
+    for (var i = 0; i < headings.length; i++) {
+      final field = manualMapping == null
+          ? fieldFor(headings[i])
+          : manualMapping[i];
+      if (field != null) mapping[i] = field;
+    }
+    final errors = <String>[];
+    if (!mapping.containsValue('name')) errors.add('Map a food name column.');
+    if (!mapping.values.any(
+      (f) => nutritionFields
+          .skip(2)
+          .takeWhile((field) => field != 'servingSize')
+          .contains(f),
+    )) {
+      errors.add('Map at least one nutrient column.');
+    }
+    if (records.length < 2) errors.add('The file has no food rows.');
+    final entries = <NutritionEntry>[];
+    for (var row = 1; row < records.length; row++) {
+      final cells = records[row];
+      final entry = NutritionEntry()..sourceRow = row;
+      final mappedBases = mapping.keys.map((i) => _basis(headings[i])).toSet();
+      entry.basis =
+          selectedBasis ??
+          (mappedBases.contains(NutritionBasis.per100g)
+              ? NutritionBasis.per100g
+              : mappedBases.contains(NutritionBasis.per100ml)
+              ? NutritionBasis.per100ml
+              : mappedBases.contains(NutritionBasis.serving)
+              ? NutritionBasis.serving
+              : mappedBases.contains(NutritionBasis.portion)
+              ? NutritionBasis.portion
+              : mappedBases.contains(NutritionBasis.package)
+              ? NutritionBasis.package
+              : NutritionBasis.unknown);
+      var badRow = false;
+      final sizeColumns = <({String heading, String field, String value})>[];
+      for (final item in mapping.entries) {
+        if (item.key >= cells.length) continue;
+        final raw = cells[item.key].trim();
+        if (raw.isEmpty) continue;
+        if (item.value == 'servingSize' || item.value == 'servingUnit') {
+          sizeColumns.add((
+            heading: headings[item.key],
+            field: item.value,
+            value: raw,
+          ));
+          continue;
+        }
+        final columnBasis = _basis(headings[item.key]);
+        if (columnBasis != NutritionBasis.unknown &&
+            columnBasis != entry.basis) {
+          continue;
+        }
+        if (item.value == 'name') {
+          entry.name = raw;
+          continue;
+        }
+        if (item.value == 'brand') {
+          entry.brand = raw;
+          continue;
+        }
+        final nutrient = parseNutrientCell(
+          item.value,
+          _withHeadingUnit(raw, headingUnit(headings[item.key])),
+        );
+        if (nutrient == null) {
+          errors.add('Row ${row + 1}: invalid ${item.value}.');
+          badRow = true;
+          continue;
+        }
+        entry.values[nutrient.$1] = nutrient.$2;
+      }
+      _assignFileSize(entry, sizeColumns);
+      if (entry.basis == NutritionBasis.unknown) {
+        entry.basis = headings.any((h) => _basis(h) == NutritionBasis.per100ml)
+            ? NutritionBasis.per100ml
+            : headings.any((h) => _basis(h) == NutritionBasis.per100g)
+            ? NutritionBasis.per100g
+            : NutritionBasis.unknown;
+      }
+      if (badRow ||
+          !FoodNameValidator.isValid(entry.name) ||
+          !entry.hasNutrients) {
+        errors.add(
+          'Row ${row + 1}: a name and at least one nutrient are required.',
+        );
+      } else {
+        _checkEnergy(entry);
+        entries.add(entry);
+      }
+    }
+    return NutritionFileResult(
+      entries,
+      errors,
+      headings: headings,
+      mapping: mapping,
+      rows: records,
+    );
+  }
+
+  static List<List<String>> _csvRecords(String text, String delimiter) {
+    final rows = <List<String>>[];
+    var row = <String>[];
+    var cell = StringBuffer();
+    var quoted = false;
+    for (var i = 0; i < text.length; i++) {
+      final c = text[i];
+      if (c == '"') {
+        if (quoted && i + 1 < text.length && text[i + 1] == '"') {
+          cell.write('"');
+          i++;
+        } else {
+          quoted = !quoted;
+        }
+      } else if (!quoted && (c == delimiter || c == '\n' || c == '\r')) {
+        row.add(cell.toString());
+        cell = StringBuffer();
+        if (c != delimiter) {
+          if (row.any((x) => x.trim().isNotEmpty)) rows.add(row);
+          row = [];
+          if (c == '\r' && i + 1 < text.length && text[i + 1] == '\n') i++;
+        }
+      } else {
+        cell.write(c);
+      }
+    }
+    row.add(cell.toString());
+    if (row.any((x) => x.trim().isNotEmpty)) rows.add(row);
+    return rows;
+  }
+
+  static NutritionFileResult parseJson(
+    String text, {
+    NutritionBasis? selectedBasis,
+    Map<int, String>? manualMapping,
+  }) {
+    dynamic decoded;
+    try {
+      decoded = jsonDecode(text);
+    } catch (_) {
+      return NutritionFileResult([], ['Invalid JSON.']);
+    }
+    final list = decoded is List
+        ? decoded
+        : decoded is Map && decoded['foods'] is List
+        ? decoded['foods']
+        : [decoded];
+    final headings = <String>[];
+    for (final value in list) {
+      if (value is Map) {
+        for (final key in value.keys) {
+          if (key is String && !headings.contains(key)) headings.add(key);
+        }
+      }
+    }
+    final mapping = <int, String>{};
+    for (var i = 0; i < headings.length; i++) {
+      final field = manualMapping == null
+          ? fieldFor(headings[i])
+          : manualMapping[i];
+      if (field != null) mapping[i] = field;
+    }
+    final entries = <NutritionEntry>[];
+    final errors = <String>[if (list.isEmpty) 'The file has no foods.'];
+    for (var i = 0; i < list.length; i++) {
+      if (list[i] is! Map) {
+        errors.add('Entry ${i + 1}: expected an object.');
+        continue;
+      }
+      final object = Map<String, dynamic>.from(list[i] as Map);
+      final entry = NutritionEntry()..sourceRow = i;
+      final keyedBases = object.keys.map(_basis).toSet();
+      entry.basis =
+          selectedBasis ??
+          (keyedBases.contains(NutritionBasis.per100g)
+              ? NutritionBasis.per100g
+              : keyedBases.contains(NutritionBasis.per100ml)
+              ? NutritionBasis.per100ml
+              : keyedBases.contains(NutritionBasis.serving)
+              ? NutritionBasis.serving
+              : keyedBases.contains(NutritionBasis.portion)
+              ? NutritionBasis.portion
+              : keyedBases.contains(NutritionBasis.package)
+              ? NutritionBasis.package
+              : NutritionBasis.unknown);
+      var badEntry = false;
+      final sizeColumns = <({String heading, String field, String value})>[];
+      for (final item in object.entries) {
+        if (item.key.toLowerCase() == 'basis') {
+          if (entry.basis == NutritionBasis.unknown) {
+            entry.basis = _basis(item.value.toString());
+          }
+          continue;
+        }
+        final field = mapping[headings.indexOf(item.key)];
+        if (field == null || item.value == null) continue;
+        if (field != 'servingSize' && field != 'servingUnit') {
+          final columnBasis = _basis(item.key);
+          if (columnBasis != NutritionBasis.unknown &&
+              columnBasis != entry.basis) {
+            continue;
+          }
+        }
+        // A nested object or list would be read through its toString().
+        if (item.value is Map || item.value is List) {
+          errors.add('Entry ${i + 1}: invalid $field.');
+          badEntry = true;
+          continue;
+        }
+        final value = item.value.toString();
+        if (field == 'servingSize' || field == 'servingUnit') {
+          sizeColumns.add((heading: item.key, field: field, value: value));
+          continue;
+        }
+        if (field == 'name') {
+          entry.name = value;
+        } else if (field == 'brand') {
+          entry.brand = value;
+        } else {
+          final nutrient = parseNutrientCell(
+            field,
+            _withHeadingUnit(value, headingUnit(item.key)),
+          );
+          if (nutrient == null) {
+            errors.add('Entry ${i + 1}: invalid $field.');
+            badEntry = true;
+          } else {
+            entry.values[nutrient.$1] = nutrient.$2;
+          }
+        }
+      }
+      _assignFileSize(entry, sizeColumns);
+      if (badEntry ||
+          !FoodNameValidator.isValid(entry.name) ||
+          !entry.hasNutrients) {
+        errors.add(
+          'Entry ${i + 1}: a name and at least one nutrient are required.',
+        );
+      } else {
+        _checkEnergy(entry);
+        entries.add(entry);
+      }
+    }
+    return NutritionFileResult(
+      entries,
+      errors,
+      headings: headings,
+      mapping: mapping,
+    );
+  }
+}
+,
     ).firstMatch(raw);
     if (match == null) return null;
     final value = _toDouble(match[1]!);
