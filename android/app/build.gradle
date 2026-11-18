@@ -99,10 +99,10 @@ android {
             applicationIdSuffix ".prtest"
             versionNameSuffix "-prtest"
         }
-        comparison {
+        releasecheck {
             dimension "version"
-            applicationIdSuffix ".comparison"
-            versionNameSuffix "-comparison"
+            applicationIdSuffix ".releasecheck"
+            versionNameSuffix "-releasecheck"
         }
         full {
             dimension "version"

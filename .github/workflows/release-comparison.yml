@@ -1,5 +1,5 @@
-name: Release comparison APK
-run-name: Release comparison APK (${{ github.ref_name }})
+name: Release APK (ARM64)
+run-name: Release APK (ARM64, ${{ github.ref_name }})
 
 on:
   push:
@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   build:
-    name: Build release comparison APK
+    name: Build ARM64 release APK
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -34,14 +34,7 @@ jobs:
         with:
           flutter-version: ${{ steps.flutter_version.outputs.version }}
 
-      - name: Create placeholder environment
-        uses: ./.github/actions/write-env-file
-        with:
-          sentry_dns: https://stub@sentry.io/0
-          supabase_project_url: https://stub.supabase.co
-          supabase_project_anon_key: ci-stub
-
-      - name: Check optional Supabase configuration
+      - name: Check repository food database configuration
         id: backend
         env:
           SUPABASE_PROJECT_URL: ${{ secrets.SUPABASE_PROJECT_URL }}
@@ -51,16 +44,106 @@ jobs:
             echo "configured=true" >> "$GITHUB_OUTPUT"
           else
             echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo "Supabase reference-food search is unconfigured in this comparison build." >> "$GITHUB_STEP_SUMMARY"
           fi
 
-      - name: Create configured environment
+      - name: Write configuration from repository secrets
         if: steps.backend.outputs.configured == 'true'
         uses: ./.github/actions/write-env-file
         with:
           sentry_dns: https://stub@sentry.io/0
           supabase_project_url: ${{ secrets.SUPABASE_PROJECT_URL }}
           supabase_project_anon_key: ${{ secrets.SUPABASE_PROJECT_ANON_KEY }}
+
+      # An ephemeral encrypted handoff for the requested one-time build. The
+      # private key belongs to this runner and only the public key is uploaded.
+      - name: Create ephemeral configuration key
+        if: steps.backend.outputs.configured != 'true'
+        run: |
+          umask 077
+          openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:3072 \
+            -out "$RUNNER_TEMP/ont-build-private.pem"
+          openssl pkey -in "$RUNNER_TEMP/ont-build-private.pem" -pubout \
+            -out "$RUNNER_TEMP/ont-build-public.pem"
+
+      - name: Publish configuration public key
+        if: steps.backend.outputs.configured != 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: Config-Public-Key
+          path: ${{ runner.temp }}/ont-build-public.pem
+          retention-days: 1
+          if-no-files-found: error
+
+      - name: Read the encrypted configuration for this run
+        if: steps.backend.outputs.configured != 'true'
+        timeout-minutes: 10
+        run: |
+          set -euo pipefail
+          umask 077
+          tag="ont-release-input-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          while ! git fetch --quiet --no-tags origin "refs/tags/${tag}:refs/tags/${tag}" 2>/dev/null; do
+            sleep 5
+          done
+          trap 'rm -f "$RUNNER_TEMP/ont-build-private.pem" "$RUNNER_TEMP/ont-build-config"' EXIT
+          git cat-file tag "refs/tags/$tag" | sed '1,/^$/d' | base64 --decode | \
+            openssl pkeyutl -decrypt -inkey "$RUNNER_TEMP/ont-build-private.pem" \
+              -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:sha256 \
+              -out "$RUNNER_TEMP/ont-build-config"
+          {
+            IFS= read -r project_url
+            IFS= read -r anon_key
+          } < "$RUNNER_TEMP/ont-build-config"
+          [[ "$project_url" =~ ^https://[a-z0-9]+\.supabase\.co$ ]]
+          [[ "$anon_key" =~ ^[a-zA-Z0-9_.-]+$ ]]
+          echo "::add-mask::$project_url"
+          echo "::add-mask::$anon_key"
+          {
+            printf 'SENTRY_DNS="https://stub@sentry.io/0"\n'
+            printf 'SUPABASE_PROJECT_URL="%s"\n' "$project_url"
+            printf 'SUPABASE_PROJECT_ANON_KEY="%s"\n' "$anon_key"
+          } > .env
+
+      - name: Check live reference food search
+        run: |
+          python3 - <<'PYCODE'
+          import json
+          import time
+          import urllib.request
+          from pathlib import Path
+
+          config = {
+              name: value.strip('"')
+              for name, value in (
+                  line.split("=", 1)
+                  for line in Path(".env").read_text().splitlines()
+                  if line and not line.startswith("#")
+              )
+          }
+          url = config["SUPABASE_PROJECT_URL"]
+          key = config["SUPABASE_PROJECT_ANON_KEY"]
+          request = urllib.request.Request(
+              f"{url}/rest/v1/rpc/search_food_summary",
+              headers={
+                  "apikey": key,
+                  "Authorization": f"Bearer {key}",
+                  "Content-Type": "application/json",
+              },
+              data=json.dumps(
+                  {"term": "apple raw", "sources": None, "max_rows": 5}
+              ).encode(),
+          )
+          start = time.monotonic()
+          try:
+              with urllib.request.urlopen(request, timeout=20) as response:
+                  rows = json.load(response)
+          except Exception as error:
+              raise SystemExit(
+                  f"Reference food search failed ({type(error).__name__})."
+              ) from None
+          if not isinstance(rows, list) or not rows:
+              raise SystemExit("The live reference food search returned no rows.")
+          print(f"Reference food search returned {len(rows)} rows in {time.monotonic() - start:.2f}s.")
+          PYCODE
 
       - name: Install Flutter packages
         run: flutter pub get
@@ -73,22 +156,37 @@ jobs:
 
       - name: Create temporary test signing key
         run: |
-          keytool -genkeypair -keystore "$RUNNER_TEMP/ont-comparison.jks" \
-            -storepass android -keypass android -alias comparison \
+          keytool -genkeypair -keystore "$RUNNER_TEMP/ont-releasecheck.jks" \
+            -storepass android -keypass android -alias releasecheck \
             -keyalg RSA -keysize 2048 -validity 3650 \
-            -dname "CN=ONT Comparison, O=Android, C=US"
+            -dname "CN=ONT Release Test, O=Android, C=US"
           {
-            printf 'storeFile=%s\n' "$RUNNER_TEMP/ont-comparison.jks"
-            printf 'storePassword=android\nkeyPassword=android\nkeyAlias=comparison\n'
+            printf 'storeFile=%s\n' "$RUNNER_TEMP/ont-releasecheck.jks"
+            printf 'storePassword=android\nkeyPassword=android\nkeyAlias=releasecheck\n'
           } > android/key.properties
 
-      - name: Build release comparison APK
-        run: flutter build apk --flavor comparison --release
+      - name: Build ARM64 release APK
+        run: flutter build apk --flavor releasecheck --release --split-per-abi --target-platform android-arm64
 
-      - name: Upload comparison APK
+      - name: Verify the release APK
+        run: |
+          apk=$(find build/app/outputs/flutter-apk -name 'app-arm64-v8a-releasecheck-release.apk' -type f -print -quit)
+          test -n "$apk"
+          tools=$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -1)
+          "$tools" verify "$apk"
+          "${tools%/*}/aapt" dump badging "$apk" > "$RUNNER_TEMP/apk-badging.txt"
+          if rg -q '^application-debuggable' "$RUNNER_TEMP/apk-badging.txt"; then
+            echo "::error::The APK manifest marks this app as debuggable."
+            exit 1
+          fi
+          unzip -Z1 "$apk" > "$RUNNER_TEMP/apk-files.txt"
+          rg -q '^lib/arm64-v8a/libapp\.so$' "$RUNNER_TEMP/apk-files.txt"
+          cp "$apk" "$RUNNER_TEMP/OpenNutriTracker-ARM64-Release.apk"
+
+      - name: Upload release APK
         uses: actions/upload-artifact@v7
         with:
-          name: OpenNutriTracker-Release-Comparison
-          path: build/app/outputs/flutter-apk/app-comparison-release.apk
+          name: OpenNutriTracker-ARM64-Release
+          path: ${{ runner.temp }}/OpenNutriTracker-ARM64-Release.apk
           if-no-files-found: error
           retention-days: 14
