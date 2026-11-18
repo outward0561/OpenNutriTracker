@@ -64,6 +64,9 @@ class NutritionEntry {
     if (basis == NutritionBasis.unknown) {
       throw const FormatException('Select a nutrition basis before importing.');
     }
+    if (servingSize != null && (!servingSize!.isFinite || servingSize! <= 0)) {
+      throw const FormatException('A finite positive serving size is required.');
+    }
     if (servingSize != null &&
         ((basis == NutritionBasis.per100g && servingUnit == 'ml') ||
             (basis == NutritionBasis.per100ml && servingUnit == 'g'))) {
@@ -76,6 +79,7 @@ class NutritionEntry {
       _ => servingSize,
     };
     if (quantity == null ||
+        !quantity.isFinite ||
         quantity <= 0 ||
         (basis != NutritionBasis.per100g &&
             basis != NutritionBasis.per100ml &&
@@ -84,16 +88,28 @@ class NutritionEntry {
       throw const FormatException('A serving size in g or ml is required.');
     }
     final factor = 100 / quantity;
+    if (!factor.isFinite) {
+      throw const FormatException('Serving size is too small to convert.');
+    }
     final result = <String, double?>{};
     for (final field in values.keys) {
       final value = values[field];
-      if (value != null) result[field] = value * factor;
+      if (value != null) {
+        final converted = value * factor;
+        if (!value.isFinite || value < 0 || !converted.isFinite) {
+          throw const FormatException('Nutritional values must be finite and non-negative.');
+        }
+        result[field] = converted;
+      }
     }
     if (result['kcal'] == null && result['kj'] != null) {
       result['kcal'] = result['kj']! / 4.184;
     }
     if (result['sodium'] == null && result['salt'] != null) {
       result['sodium'] = result['salt']! * 400;
+      if (!result['sodium']!.isFinite) {
+        throw const FormatException('Salt value is too large to convert.');
+      }
     }
     return result;
   }
@@ -320,14 +336,16 @@ class NutritionImportParser {
   }
 
   static (String, double)? parseNutrientCell(String field, String raw) {
-    final match = _number.firstMatch(raw);
+    // A file cell is one value, not a label or a list of alternatives.
+    // Parsing a prefix would silently turn `1/2 g` into 1 g or
+    // `100 / 200 kcal` into 100 kcal.
+    final match = RegExp(
+      '^\\s*($_numberPattern)\\s*([a-zA-Zµμ%]+)?\\s*\$',
+    ).firstMatch(raw);
     if (match == null) return null;
     final value = _toDouble(match[1]!);
     if (value == null || !value.isFinite || value < 0) return null;
-    final suffix = raw.substring(match.end).trimLeft();
-    final unit = RegExp(
-      r'^[a-zA-Zµμ%]+',
-    ).firstMatch(suffix)?.group(0)?.toLowerCase();
+    final unit = match[2]?.toLowerCase();
     if (unit == '%') return null;
     if (field == 'kcal' || field == 'kj') {
       if (unit == null) return (field, value);
@@ -567,25 +585,36 @@ class NutritionImportParser {
         () => (parseNumber(match[3]!), match[4]!.toLowerCase()),
       );
     }
+    final sizeColumns =
+        <String, List<({String heading, String field, String value})>>{};
     for (final match in RegExp(
-      r'^(serving|portion|package)\s*size\s*[:\t]\s*[^\r\n]*?(\d+(?:[.,]\d+)?)\s*(g|ml)\b',
+      r'^(serving|portion|package)\s*size\s*[:\t]\s*([^\r\n]+)',
       caseSensitive: false,
       multiLine: true,
     ).allMatches(text)) {
-      sizes.putIfAbsent(
-        match[1]!.toLowerCase(),
-        () => (parseNumber(match[2]!), match[3]!.toLowerCase()),
-      );
+      final kind = match[1]!.toLowerCase();
+      (sizeColumns[kind] ??= []).add((
+        heading: '$kind size',
+        field: 'servingSize',
+        value: match[2]!,
+      ));
     }
-    for (final match in RegExp(
-      r'^(serving|portion|package)\s*size\s*[:\t]\s*(\d+(?:[.,]\d+)?)\s*$',
-      caseSensitive: false,
-      multiLine: true,
-    ).allMatches(text)) {
-      sizes.putIfAbsent(
-        match[1]!.toLowerCase(),
-        () => (parseNumber(match[2]!), null),
+    final sizeIssues = <String, List<String>>{};
+    for (final item in sizeColumns.entries) {
+      final probe = NutritionEntry(
+        basis: switch (item.key) {
+          'portion' => NutritionBasis.portion,
+          'package' => NutritionBasis.package,
+          _ => NutritionBasis.serving,
+        },
       );
+      _assignFileSize(probe, item.value);
+      if (probe.issues.isNotEmpty) {
+        sizes.remove(item.key);
+        sizeIssues[item.key] = probe.issues;
+      } else {
+        sizes[item.key] = (probe.servingSize, probe.servingUnit);
+      }
     }
     final explicitUnits = <String, String>{};
     for (final match in RegExp(
@@ -632,6 +661,7 @@ class NutritionImportParser {
       }
     }
     final size = sizes[sizeKind];
+    entry.issues.addAll(sizeIssues[sizeKind] ?? const []);
     if (size != null) {
       entry.servingSize = size.$1;
       entry.servingUnit = size.$2;
