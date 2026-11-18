@@ -188,16 +188,21 @@ class CalendarDayBloc extends Bloc<CalendarDayEvent, CalendarDayState> {
     day = _dateLabel(day);
     // The entry and its row together (#1317).
     await withTrackedDayLockOnProfile(() async {
-      await _deleteIntakeUsecase.deleteIntake(intakeEntity);
+      // A stale UI action can arrive after this intake was already deleted.
+      // Check while holding the same lock as the tracked-day update so the
+      // running totals are never debited twice.
+      final stored = await _getIntakeUsecase.getIntakeById(intakeEntity.id);
+      if (stored == null) return;
+      await _deleteIntakeUsecase.deleteIntake(stored);
       await _addTrackedDayUsecase.removeDayCaloriesTracked(
         day,
-        intakeEntity.totalKcal,
+        stored.totalKcal,
       );
       await _addTrackedDayUsecase.removeDayMacrosTracked(
         day,
-        carbsTracked: intakeEntity.totalCarbsGram,
-        fatTracked: intakeEntity.totalFatsGram,
-        proteinTracked: intakeEntity.totalProteinsGram,
+        carbsTracked: stored.totalCarbsGram,
+        fatTracked: stored.totalFatsGram,
+        proteinTracked: stored.totalProteinsGram,
       );
     });
   }

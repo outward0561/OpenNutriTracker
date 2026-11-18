@@ -547,6 +547,8 @@ void main() {
     testWidgets('the review cannot be closed while it is saving', (
       tester,
     ) async {
+      final semantics = tester.ensureSemantics();
+      addTearDown(semantics.dispose);
       await _register([_intake('Bread')]);
       final saved = _BlockingMealDetailBloc();
       getIt.registerSingleton<MealDetailBloc>(saved);
@@ -564,6 +566,14 @@ void main() {
       expect(_withIdentifier('selected-food-amount-0'), findsOneWidget);
       expect(_withIdentifier('selected-food-unit-0'), findsOneWidget);
       expect(_withIdentifier('selected-foods-add'), findsOneWidget);
+      final amountBounds = tester
+          .getSemantics(_withIdentifier('selected-food-amount-0'))
+          .rect;
+      expect(amountBounds.width, greaterThan(0));
+      expect(
+        amountBounds.width,
+        lessThan(tester.getSize(find.byType(AlertDialog)).width),
+      );
 
       await tester.tap(find.text(l10nEn.addSelectedFoodsLabel));
       await tester.pump();

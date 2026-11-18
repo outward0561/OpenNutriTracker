@@ -2,6 +2,84 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:opennutritracker/features/edit_meal/domain/nutrition_import_parser.dart';
 
 void main() {
+  test('CSV and JSON use the metric amount in serving descriptions', () {
+    final csv = NutritionImportParser.parseCsv(
+      'Name,Serving size,Energy per serving\nMilk,1 cup (240 ml),100 kcal',
+    ).entries.single;
+    final json = NutritionImportParser.parseJson(
+      '{"name":"Milk","serving_size":"1 cup (240 ml)",'
+      '"energy_per_serving":"100 kcal"}',
+    ).entries.single;
+    for (final entry in [csv, json]) {
+      expect(entry.servingSize, 240);
+      expect(entry.servingUnit, 'ml');
+      expect(entry.toPer100()['kcal'], closeTo(100 / 2.4, 0.000001));
+    }
+  });
+
+  test('file imports use the size belonging to the selected basis', () {
+    const csv = 'Name,Package size,Serving size,Energy per package,'
+        'Energy per serving\nSoup,200 g,50 g,200 kcal,25 kcal';
+    const json = '{"name":"Soup","package_size":"200 g",'
+        '"serving_size":"50 g","energy_per_package":"200 kcal",'
+        '"energy_per_serving":"25 kcal"}';
+    for (final parse in [
+      (NutritionBasis basis) => NutritionImportParser.parseCsv(
+        csv,
+        selectedBasis: basis,
+      ),
+      (NutritionBasis basis) => NutritionImportParser.parseJson(
+        json,
+        selectedBasis: basis,
+      ),
+    ]) {
+      final package = parse(NutritionBasis.package).entries.single;
+      expect(package.servingSize, 200);
+      expect(package.toPer100()['kcal'], 100);
+      final serving = parse(NutritionBasis.serving).entries.single;
+      expect(serving.servingSize, 50);
+      expect(serving.toPer100()['kcal'], 50);
+    }
+  });
+
+  test('file sizes do not borrow a different basis or guess ambiguous units', () {
+    for (final entry in [
+      NutritionImportParser.parseCsv(
+        'Name,Serving size,Energy per package\nSoup,50 g,200 kcal',
+      ).entries.single,
+      NutritionImportParser.parseJson(
+        '{"name":"Soup","serving_size":"50 g",'
+        '"energy_per_package":"200 kcal"}',
+      ).entries.single,
+      NutritionImportParser.parseCsv(
+        'Name,Serving size,Energy per serving\nSoup,1 cup,200 kcal',
+      ).entries.single,
+      NutritionImportParser.parseJson(
+        '{"name":"Soup","serving_size":"50 g (40 ml)",'
+        '"energy_per_serving":"200 kcal"}',
+      ).entries.single,
+    ]) {
+      expect(entry.servingSize, isNull);
+      expect(() => entry.toPer100(), throwsFormatException);
+    }
+  });
+
+  test('file imports support portions and separate quantity and unit fields', () {
+    final portion = NutritionImportParser.parseCsv(
+      'Name;Portion size;Serving size;Energy per portion\n'
+      'Soup;125,5 g;50 g;251 kcal',
+    ).entries.single;
+    expect(portion.servingSize, 125.5);
+    expect(portion.toPer100()['kcal'], 200);
+
+    final separate = NutritionImportParser.parseJson(
+      '{"name":"Milk","serving_size":240,"serving_unit":"ml",'
+      '"energy_per_serving":120}',
+    ).entries.single;
+    expect(separate.servingSize, 240);
+    expect(separate.servingUnit, 'ml');
+    expect(separate.toPer100()['kcal'], 50);
+  });
   test('pasted table row units are applied to the selected column', () {
     const label = 'Nutrient\tPer 100 g\tPer serving\n'
         'Serving size: 50 g\n'

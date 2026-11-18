@@ -185,4 +185,17 @@ void main() {
     expect(trackedDayBox.get('2026-10-05')!.caloriesTracked, 0);
     expect(trackedDayBox.get('2026-10-04')!.caloriesTracked, 300);
   });
+
+  test('a repeated delete does not debit the same entry twice', () async {
+    await Future.wait([
+      bloc.deleteIntakeItem(_FakeContext(), toast, selectedAt0230),
+      bloc.deleteIntakeItem(_FakeContext(), toast, selectedAt0230),
+    ]);
+
+    final day = trackedDayBox.get('2026-10-05')!;
+    expect(day.caloriesTracked, 0);
+    expect(day.carbsTracked, 0);
+    expect(day.fatTracked, 0);
+    expect(day.proteinTracked, 0);
+  });
 }

@@ -643,12 +643,14 @@ class _NutritionImportDialogState extends State<NutritionImportDialog> {
                               },
                               _size,
                               id: 'serving-size',
+                              container: true,
                             ),
                           ),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Semantics(
                               identifier: 'nutrition-serving-unit',
+                              container: true,
                               child: _labeledInput(
                                 S.of(context).nutritionServingUnitLabel,
                                 DropdownButtonFormField<String>(
@@ -785,11 +787,13 @@ class _NutritionImportDialogState extends State<NutritionImportDialog> {
     String label,
     TextEditingController controller, {
     bool numeric = false,
+    bool container = false,
     required String id,
   }) => Semantics(
     // Kebab case, so a field key like `vitaminB12` is `nutrition-vitamin-b12`.
     identifier:
         'nutrition-${id.replaceAllMapped(RegExp('[A-Z]'), (m) => '-${m[0]!.toLowerCase()}')}',
+    container: container,
     child: _labeledInput(
       label,
       TextField(

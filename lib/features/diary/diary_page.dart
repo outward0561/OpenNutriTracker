@@ -15,6 +15,7 @@ import 'package:opennutritracker/core/utils/locator.dart';
 import 'package:opennutritracker/features/add_meal/presentation/add_meal_type.dart';
 import 'package:opennutritracker/features/diary/presentation/bloc/calendar_day_bloc.dart';
 import 'package:opennutritracker/features/diary/presentation/bloc/diary_bloc.dart';
+import 'package:opennutritracker/features/diary/presentation/diary_transfer_guard.dart';
 import 'package:opennutritracker/features/diary/presentation/widgets/diary_table_calendar.dart';
 import 'package:opennutritracker/features/diary/presentation/widgets/day_info_widget.dart';
 import 'package:opennutritracker/features/diary/presentation/widgets/diary_transfer_dialog.dart';
@@ -35,6 +36,8 @@ class _DiaryPageState extends State<DiaryPage> with WidgetsBindingObserver {
   late CalendarDayBloc _calendarDayBloc;
   late MealDetailBloc _mealDetailBloc;
   late ActivityDetailBloc _activityDetailBloc;
+  // The page can be recreated while a write is still in flight.
+  static final _transferGuard = DiaryTransferGuard();
 
   // #292: Extended from 356 days (~1 year) to 5 years so old entries are never truncated
   static const _calendarDurationDays = Duration(days: 365 * 5);
@@ -157,36 +160,44 @@ class _DiaryPageState extends State<DiaryPage> with WidgetsBindingObserver {
               } else if (state is CalendarDayLoading) {
                 return _getLoadingContent();
               } else if (state is CalendarDayLoaded) {
-                return DayInfoWidget(
-                  trackedDayEntity: state.trackedDayEntity,
-                  selectedDay: _selectedDate,
-                  currentDay: _currentDate,
-                  userActivities: state.userActivityList,
-                  breakfastIntake: state.breakfastIntakeList,
-                  lunchIntake: state.lunchIntakeList,
-                  dinnerIntake: state.dinnerIntakeList,
-                  snackIntake: state.snackIntakeList,
-                  onDeleteIntake: _onDeleteIntakeItem,
-                  onDeleteActivity: _onDeleteActivityItem,
-                  onCopyIntake: _onCopyIntakeItem,
-                  onCopyActivity: _onCopyActivityItem,
-                  onTransferIntake: _transferIntake,
-                  onTransferActivity: _transferActivity,
-                  onTransferDay: _transferDay,
-                  onEditIntake: _onEditIntakeItem,
-                  onEditActivity: _onEditActivityItem,
-                  usesImperialUnits: usesImperialUnits,
-                  showMealMacros: showMealMacros,
-                  showActivityTracking: showActivityTracking,
-                  breakfastKcalTarget: state.breakfastKcalTarget,
-                  lunchKcalTarget: state.lunchKcalTarget,
-                  dinnerKcalTarget: state.dinnerKcalTarget,
-                  snackKcalTarget: state.snackKcalTarget,
-                  breakfastSharePct: state.breakfastSharePct,
-                  lunchSharePct: state.lunchSharePct,
-                  dinnerSharePct: state.dinnerSharePct,
-                  snackSharePct: state.snackSharePct,
-                  diarySortPreferences: state.diarySortPreferences,
+                return ListenableBuilder(
+                  listenable: _transferGuard,
+                  builder: (context, _) => DayInfoWidget(
+                    trackedDayEntity: state.trackedDayEntity,
+                    selectedDay: _selectedDate,
+                    currentDay: _currentDate,
+                    userActivities: state.userActivityList,
+                    breakfastIntake: state.breakfastIntakeList,
+                    lunchIntake: state.lunchIntakeList,
+                    dinnerIntake: state.dinnerIntakeList,
+                    snackIntake: state.snackIntakeList,
+                    onDeleteIntake: _onDeleteIntakeItem,
+                    onDeleteActivity: _onDeleteActivityItem,
+                    onCopyIntake: _onCopyIntakeItem,
+                    onCopyActivity: _onCopyActivityItem,
+                    onTransferIntake: (intake) =>
+                        _runTransfer(() => _transferIntake(intake)),
+                    onTransferActivity: (activity) =>
+                        _runTransfer(() => _transferActivity(activity)),
+                    onTransferDay: (intakes, activities, day) => _runTransfer(
+                      () => _transferDay(intakes, activities, day),
+                    ),
+                    transferInProgress: _transferGuard.isRunning,
+                    onEditIntake: _onEditIntakeItem,
+                    onEditActivity: _onEditActivityItem,
+                    usesImperialUnits: usesImperialUnits,
+                    showMealMacros: showMealMacros,
+                    showActivityTracking: showActivityTracking,
+                    breakfastKcalTarget: state.breakfastKcalTarget,
+                    lunchKcalTarget: state.lunchKcalTarget,
+                    dinnerKcalTarget: state.dinnerKcalTarget,
+                    snackKcalTarget: state.snackKcalTarget,
+                    breakfastSharePct: state.breakfastSharePct,
+                    lunchSharePct: state.lunchSharePct,
+                    dinnerSharePct: state.dinnerSharePct,
+                    snackSharePct: state.snackSharePct,
+                    diarySortPreferences: state.diarySortPreferences,
+                  ),
                 );
               }
               return const SizedBox();
@@ -325,6 +336,10 @@ class _DiaryPageState extends State<DiaryPage> with WidgetsBindingObserver {
       includesFoods: includesFoods,
     ),
   );
+
+  Future<void> _runTransfer(Future<void> Function() transfer) async {
+    await _transferGuard.run(transfer);
+  }
 
   void _refreshTransfers() {
     _diaryBloc.add(const LoadDiaryYearEvent());

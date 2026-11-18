@@ -215,6 +215,7 @@ class _AddMealScreenState extends State<AddMealScreen> {
                               Expanded(
                                 child: Semantics(
                                   identifier: 'selected-food-amount-$index',
+                                  container: true,
                                   child: TextField(
                                     controller: amounts[index],
                                     keyboardType:
@@ -911,6 +912,15 @@ class _AddMealScreenState extends State<AddMealScreen> {
     ),
   );
 
+  static const _pendingResultsIndicator = Padding(
+    padding: EdgeInsets.symmetric(vertical: 8),
+    child: SizedBox(
+      width: 20,
+      height: 20,
+      child: CircularProgressIndicator(strokeWidth: 2),
+    ),
+  );
+
   Widget _buildResults(BuildContext context, AppPalette palette, String query) {
     switch (_source) {
       case _SearchSource.all:
@@ -1054,17 +1064,7 @@ class _AddMealScreenState extends State<AddMealScreen> {
                               ),
                             ),
                           ),
-                          if (remotePending)
-                            const Padding(
-                              padding: EdgeInsets.symmetric(vertical: 8),
-                              child: SizedBox(
-                                width: 20,
-                                height: 20,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                ),
-                              ),
-                            ),
+                          if (remotePending) _pendingResultsIndicator,
                         ],
                       );
                     },
@@ -1153,15 +1153,7 @@ class _AddMealScreenState extends State<AddMealScreen> {
                             ),
                           ),
                         ),
-                        if (state.remotePending)
-                          const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 8),
-                            child: SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
-                          ),
+                        if (state.remotePending) _pendingResultsIndicator,
                       ],
                     ),
                   );
@@ -1254,15 +1246,7 @@ class _AddMealScreenState extends State<AddMealScreen> {
                             ),
                           ),
                         ),
-                        if (state.remotePending)
-                          const Padding(
-                            padding: EdgeInsets.symmetric(vertical: 8),
-                            child: SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            ),
-                          ),
+                        if (state.remotePending) _pendingResultsIndicator,
                       ],
                     ),
                   );

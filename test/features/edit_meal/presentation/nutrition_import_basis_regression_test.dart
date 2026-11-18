@@ -98,6 +98,8 @@ void main() {
   testWidgets('changing basis uses its size and preserves size edits', (
     tester,
   ) async {
+    final semantics = tester.ensureSemantics();
+    addTearDown(semantics.dispose);
     List<NutritionEntry>? saved;
     await open(tester, saveAll: (entries) async {
       saved = entries;
@@ -112,6 +114,14 @@ void main() {
     await tester.pumpAndSettle();
     await changeBasis(tester, NutritionBasis.per100g, 'Package');
     await show(tester, input('serving-size'));
+    final size = find.bySemanticsIdentifier('nutrition-serving-size');
+    final unit = find.bySemanticsIdentifier('nutrition-serving-unit');
+    final sizeRect = tester.getSemantics(size).rect;
+    final unitRect = tester.getSemantics(unit).rect;
+    expect(sizeRect.width, greaterThan(0));
+    expect(unitRect.width, greaterThan(0));
+    expect(sizeRect.width, lessThan(tester.view.physicalSize.width / 2));
+    expect(unitRect.width, lessThan(tester.view.physicalSize.width / 2));
     expect(tester.widget<TextField>(input('serving-size')).controller!.text, '200.0');
     await tester.tap(find.bySemanticsIdentifier('nutrition-save-all'));
     await tester.pumpAndSettle();

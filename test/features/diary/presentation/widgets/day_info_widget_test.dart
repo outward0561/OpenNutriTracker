@@ -83,6 +83,7 @@ Future<void> _pumpOmadDay(
   void Function(IntakeEntity intake)? onCopyIntake,
   void Function(IntakeEntity intake)? onTransferIntake,
   void Function(List<IntakeEntity>, DateTime)? onTransferDay,
+  bool transferInProgress = false,
   // A past day unless a test says otherwise.
   DateTime? currentDay,
 }) async {
@@ -105,6 +106,7 @@ Future<void> _pumpOmadDay(
               snackIntake: const [],
               usesImperialUnits: false,
               showActivityTracking: false,
+              transferInProgress: transferInProgress,
               onDeleteIntake: onDeleteIntake ?? (_, _) {},
               onDeleteActivity: (_, _) {},
               onTransferIntake: (intake) async =>
@@ -205,6 +207,24 @@ void main() {
       'Dinner Stew',
     ]);
     expect(selectedDate, DateTime(2026, 6, 15));
+  });
+
+  testWidgets('whole-day action is disabled while a transfer is pending', (
+    tester,
+  ) async {
+    var transferCount = 0;
+    await _pumpOmadDay(
+      tester,
+      breakfastIntake: const [],
+      transferInProgress: true,
+      onTransferDay: (_, _) => transferCount++,
+    );
+    final button = tester.widget<OutlinedButton>(
+      find.widgetWithText(OutlinedButton, l10nEn.diaryCopyMoveDayLabel),
+    );
+    expect(button.onPressed, isNull);
+    await tester.tap(find.text(l10nEn.diaryCopyMoveDayLabel));
+    expect(transferCount, 0);
   });
 
   testWidgets('each food has a visible transfer action', (tester) async {

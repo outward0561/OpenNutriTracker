@@ -56,6 +56,7 @@ class DayInfoWidget extends StatefulWidget {
 
   final bool usesImperialUnits;
   final bool showMealMacros;
+  final bool transferInProgress;
   // When the user disables Show Activity Tracking in Settings, the diary's
   // per-day Activity section is hidden alongside the home one.
   final bool showActivityTracking;
@@ -110,6 +111,7 @@ class DayInfoWidget extends StatefulWidget {
     required this.snackIntake,
     required this.usesImperialUnits,
     this.showMealMacros = true,
+    this.transferInProgress = false,
     this.showActivityTracking = true,
     this.diarySortPreferences,
     required this.onDeleteIntake,
@@ -228,11 +230,13 @@ class _DayInfoWidgetState extends State<DayInfoWidget> {
               child: OutlinedButton.icon(
                 icon: const Icon(Icons.content_copy_outlined),
                 label: Text(S.of(context).diaryCopyMoveDayLabel),
-                onPressed: () => widget.onTransferDay(
-                  List.of(_allIntakes),
-                  List.of(widget.userActivities),
-                  widget.selectedDay,
-                ),
+                onPressed: widget.transferInProgress
+                    ? null
+                    : () => widget.onTransferDay(
+                        List.of(_allIntakes),
+                        List.of(widget.userActivities),
+                        widget.selectedDay,
+                      ),
               ),
             ),
           ),

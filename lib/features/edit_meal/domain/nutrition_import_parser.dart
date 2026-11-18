@@ -442,6 +442,97 @@ class NutritionImportParser {
     return NutritionBasis.unknown;
   }
 
+  /// File size and unit headings describe their own quantity, not the
+  /// nutrient column. Keep package, portion and serving values distinct.
+  static NutritionBasis? _fileSizeBasis(String heading) {
+    final normalized = heading.replaceAll(RegExp(r'[_-]+'), ' ');
+    final match = RegExp(
+      r'\b(serving|portion|package)\b',
+      caseSensitive: false,
+    ).firstMatch(normalized);
+    return switch (match?.group(1)?.toLowerCase()) {
+      'serving' => NutritionBasis.serving,
+      'portion' => NutritionBasis.portion,
+      'package' => NutritionBasis.package,
+      _ => null,
+    };
+  }
+
+  static void _assignFileSize(
+    NutritionEntry entry,
+    List<({String heading, String field, String value})> columns,
+  ) {
+    final wanted = switch (entry.basis) {
+      NutritionBasis.serving => NutritionBasis.serving,
+      NutritionBasis.portion => NutritionBasis.portion,
+      NutritionBasis.package => NutritionBasis.package,
+      _ => NutritionBasis.serving,
+    };
+    final specific = columns.where(
+      (column) => _fileSizeBasis(column.heading) == wanted,
+    ).toList();
+    final candidates = [
+      ...specific,
+      ...columns.where(
+        (column) =>
+            _fileSizeBasis(column.heading) == null &&
+            !specific.any((item) => item.field == column.field),
+      ),
+    ];
+    final sizes = <(double, String?)>[];
+    final units = <String>{};
+    var invalid = false;
+    for (final column in candidates) {
+      final raw = column.value.trim();
+      if (raw.isEmpty) continue;
+      if (column.field == 'servingUnit') {
+        final unit = raw.toLowerCase();
+        if (unit == 'g' || unit == 'ml') {
+          units.add(unit);
+        } else {
+          invalid = true;
+        }
+        continue;
+      }
+      final metric = RegExp(
+        '($_numberPattern)\\s*(g|ml)\\b',
+        caseSensitive: false,
+      ).allMatches(raw).toList();
+      if (metric.isNotEmpty) {
+        for (final match in metric) {
+          final size = _toDouble(match[1]!);
+          if (size == null || !size.isFinite || size < 0) {
+            invalid = true;
+          } else {
+            sizes.add((size, match[2]!.toLowerCase()));
+          }
+        }
+      } else if (RegExp('^\\s*$_numberPattern\\s*\$').hasMatch(raw)) {
+        final size = parseNumber(raw);
+        final unit = headingUnit(column.heading);
+        if (size == null ||
+            !size.isFinite ||
+            (unit != null && unit != 'g' && unit != 'ml')) {
+          invalid = true;
+        } else {
+          sizes.add((size, unit));
+        }
+      } else {
+        invalid = true;
+      }
+    }
+    final amounts = sizes.map((size) => size.$1).toSet();
+    units.addAll(sizes.map((size) => size.$2).whereType<String>());
+    if (invalid || amounts.length > 1 || units.length > 1) {
+      entry.issues.add(
+        'Ambiguous or unsupported serving size; enter a size in g or ml.',
+      );
+      return;
+    }
+    entry.servingSize = amounts.isEmpty ? null : amounts.single;
+    entry.servingUnit = units.isEmpty ? null : units.single;
+  }
+
   static NutritionEntry parseText(
     String text, {
     NutritionBasis? selectedBasis,
@@ -778,39 +869,30 @@ class NutritionImportParser {
               ? NutritionBasis.package
               : NutritionBasis.unknown);
       var badRow = false;
+      final sizeColumns = <({String heading, String field, String value})>[];
       for (final item in mapping.entries) {
+        if (item.key >= cells.length) continue;
+        final raw = cells[item.key].trim();
+        if (raw.isEmpty) continue;
+        if (item.value == 'servingSize' || item.value == 'servingUnit') {
+          sizeColumns.add((
+            heading: headings[item.key],
+            field: item.value,
+            value: raw,
+          ));
+          continue;
+        }
         final columnBasis = _basis(headings[item.key]);
         if (columnBasis != NutritionBasis.unknown &&
             columnBasis != entry.basis) {
           continue;
         }
-        if (item.key >= cells.length) continue;
-        final raw = cells[item.key].trim();
-        if (raw.isEmpty) continue;
         if (item.value == 'name') {
           entry.name = raw;
           continue;
         }
         if (item.value == 'brand') {
           entry.brand = raw;
-          continue;
-        }
-        if (item.value == 'servingUnit') {
-          entry.servingUnit =
-              raw.toLowerCase() == 'g' || raw.toLowerCase() == 'ml'
-              ? raw.toLowerCase()
-              : null;
-          continue;
-        }
-        if (item.value == 'servingSize') {
-          entry.servingSize = parseNumber(raw);
-          final detectedUnit =
-              RegExp(r'\bml\b', caseSensitive: false).hasMatch(raw)
-              ? 'ml'
-              : RegExp(r'\bg\b', caseSensitive: false).hasMatch(raw)
-              ? 'g'
-              : null;
-          entry.servingUnit = detectedUnit ?? entry.servingUnit;
           continue;
         }
         final nutrient = parseNutrientCell(
@@ -824,6 +906,7 @@ class NutritionImportParser {
         }
         entry.values[nutrient.$1] = nutrient.$2;
       }
+      _assignFileSize(entry, sizeColumns);
       if (entry.basis == NutritionBasis.unknown) {
         entry.basis = headings.any((h) => _basis(h) == NutritionBasis.per100ml)
             ? NutritionBasis.per100ml
@@ -937,6 +1020,7 @@ class NutritionImportParser {
               ? NutritionBasis.package
               : NutritionBasis.unknown);
       var badEntry = false;
+      final sizeColumns = <({String heading, String field, String value})>[];
       for (final item in object.entries) {
         if (item.key.toLowerCase() == 'basis') {
           if (entry.basis == NutritionBasis.unknown) {
@@ -944,13 +1028,15 @@ class NutritionImportParser {
           }
           continue;
         }
-        final columnBasis = _basis(item.key);
-        if (columnBasis != NutritionBasis.unknown &&
-            columnBasis != entry.basis) {
-          continue;
-        }
         final field = mapping[headings.indexOf(item.key)];
         if (field == null || item.value == null) continue;
+        if (field != 'servingSize' && field != 'servingUnit') {
+          final columnBasis = _basis(item.key);
+          if (columnBasis != NutritionBasis.unknown &&
+              columnBasis != entry.basis) {
+            continue;
+          }
+        }
         // A nested object or list would be read through its toString().
         if (item.value is Map || item.value is List) {
           errors.add('Entry ${i + 1}: invalid $field.');
@@ -958,24 +1044,14 @@ class NutritionImportParser {
           continue;
         }
         final value = item.value.toString();
+        if (field == 'servingSize' || field == 'servingUnit') {
+          sizeColumns.add((heading: item.key, field: field, value: value));
+          continue;
+        }
         if (field == 'name') {
           entry.name = value;
         } else if (field == 'brand') {
           entry.brand = value;
-        } else if (field == 'servingUnit') {
-          entry.servingUnit =
-              value.toLowerCase() == 'g' || value.toLowerCase() == 'ml'
-              ? value.toLowerCase()
-              : null;
-        } else if (field == 'servingSize') {
-          entry.servingSize = parseNumber(value);
-          final detectedUnit =
-              RegExp(r'\bml\b', caseSensitive: false).hasMatch(value)
-              ? 'ml'
-              : RegExp(r'\bg\b', caseSensitive: false).hasMatch(value)
-              ? 'g'
-              : null;
-          entry.servingUnit = detectedUnit ?? entry.servingUnit;
         } else {
           final nutrient = parseNutrientCell(
             field,
@@ -989,6 +1065,7 @@ class NutritionImportParser {
           }
         }
       }
+      _assignFileSize(entry, sizeColumns);
       if (badEntry ||
           !FoodNameValidator.isValid(entry.name) ||
           !entry.hasNutrients) {
