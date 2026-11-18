@@ -495,11 +495,26 @@ class NutritionImportParser {
         continue;
       }
       final metric = RegExp(
-        '($_numberPattern)\\s*(g|ml)\\b',
+        '(?<![a-zA-Z0-9.,])($_numberPattern)\\s*(g|ml)\\b',
         caseSensitive: false,
       ).allMatches(raw).toList();
       if (metric.isNotEmpty) {
         for (final match in metric) {
+          final before = raw.substring(0, match.start);
+          final after = raw.substring(match.end);
+          // The unit can describe one item rather than the whole serving.
+          // Do not silently read 1/2 g as 2 g or 2 x 50 g as 50 g.
+          if (RegExp(
+                r'\d\s*(?:/|[x×*]|times)\s*$',
+                caseSensitive: false,
+              ).hasMatch(before) ||
+              RegExp(
+                r'^[\s()]*(?:each|per\s+\w+)\b',
+                caseSensitive: false,
+              ).hasMatch(after)) {
+            invalid = true;
+            continue;
+          }
           final size = _toDouble(match[1]!);
           if (size == null || !size.isFinite || size < 0) {
             invalid = true;

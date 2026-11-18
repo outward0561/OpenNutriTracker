@@ -42,6 +42,13 @@ class UserActivityRepository {
     return await _userActivityDataSource.getAllUserActivities();
   }
 
+  Future<UserActivityEntity?> getUserActivityById(String id) async {
+    for (final dbo in await _userActivityDataSource.getAllUserActivities()) {
+      if (dbo.id == id) return UserActivityEntity.fromUserActivityDBO(dbo);
+    }
+    return null;
+  }
+
   Future<List<UserActivityEntity>> getAllUserActivityByDate(
     DateTime dateTime, {
     int dayStartOffsetHours = 0,

@@ -80,6 +80,38 @@ void main() {
     expect(separate.servingUnit, 'ml');
     expect(separate.toPer100()['kcal'], 50);
   });
+
+  test('file imports reject fractional and per-item metric amounts', () {
+    for (final value in [
+      '1/2 g',
+      '2 x 50 g',
+      '2×50 g',
+      '2 bars (50 g each)',
+      '1..2 g',
+    ]) {
+      final csv = NutritionImportParser.parseCsv(
+        'Name,Serving size,Energy per serving\nFood,$value,100 kcal',
+      ).entries.single;
+      final json = NutritionImportParser.parseJson(
+        '{"name":"Food","serving_size":"$value",'
+        '"energy_per_serving":"100 kcal"}',
+      ).entries.single;
+      for (final entry in [csv, json]) {
+        expect(entry.servingSize, isNull, reason: value);
+        expect(entry.issues, isNotEmpty, reason: value);
+        expect(() => entry.toPer100(), throwsFormatException, reason: value);
+      }
+    }
+
+    // A fractional household measure accompanied by its complete metric
+    // equivalent remains unambiguous.
+    final equivalent = NutritionImportParser.parseJson(
+      '{"name":"Milk","serving_size":"1/2 cup (120 ml)",'
+      '"energy_per_serving":60}',
+    ).entries.single;
+    expect(equivalent.servingSize, 120);
+    expect(equivalent.toPer100()['kcal'], 50);
+  });
   test('pasted table row units are applied to the selected column', () {
     const label = 'Nutrient\tPer 100 g\tPer serving\n'
         'Serving size: 50 g\n'
