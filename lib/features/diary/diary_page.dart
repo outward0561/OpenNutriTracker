@@ -171,8 +171,12 @@ class _DiaryPageState extends State<DiaryPage> with WidgetsBindingObserver {
                     lunchIntake: state.lunchIntakeList,
                     dinnerIntake: state.dinnerIntakeList,
                     snackIntake: state.snackIntakeList,
-                    onDeleteIntake: _onDeleteIntakeItem,
-                    onDeleteActivity: _onDeleteActivityItem,
+                    onDeleteIntake: (intake, day) => _runTransfer(
+                      () => _onDeleteIntakeItem(intake, day),
+                    ),
+                    onDeleteActivity: (activity, day) => _runTransfer(
+                      () => _onDeleteActivityItem(activity, day),
+                    ),
                     onCopyIntake: _onCopyIntakeItem,
                     onCopyActivity: _onCopyActivityItem,
                     onTransferIntake: (intake) =>
@@ -183,8 +187,12 @@ class _DiaryPageState extends State<DiaryPage> with WidgetsBindingObserver {
                       () => _transferDay(intakes, activities, day),
                     ),
                     transferInProgress: _transferGuard.isRunning,
-                    onEditIntake: _onEditIntakeItem,
-                    onEditActivity: _onEditActivityItem,
+                    onEditIntake: (context, intake, imperial) => _runTransfer(
+                      () => _onEditIntakeItem(context, intake, imperial),
+                    ),
+                    onEditActivity: (context, activity) => _runTransfer(
+                      () => _onEditActivityItem(context, activity),
+                    ),
                     usesImperialUnits: usesImperialUnits,
                     showMealMacros: showMealMacros,
                     showActivityTracking: showActivityTracking,
@@ -228,7 +236,7 @@ class _DiaryPageState extends State<DiaryPage> with WidgetsBindingObserver {
     }
   }
 
-  void _onDeleteIntakeItem(IntakeEntity intakeEntity, DateTime day) async {
+  Future<void> _onDeleteIntakeItem(IntakeEntity intakeEntity, DateTime day) async {
     // The day the entry was listed under when it was long-pressed, not
     // `trackedDayEntity?.day ?? DateTime.now()`: on a past day with no
     // tracked-day row that fallback debited today's row for an entry of
@@ -246,7 +254,7 @@ class _DiaryPageState extends State<DiaryPage> with WidgetsBindingObserver {
     }
   }
 
-  void _onDeleteActivityItem(
+  Future<void> _onDeleteActivityItem(
     UserActivityEntity userActivityEntity,
     DateTime day,
   ) async {
@@ -496,7 +504,7 @@ class _DiaryPageState extends State<DiaryPage> with WidgetsBindingObserver {
     }
   }
 
-  void _onEditIntakeItem(
+  Future<void> _onEditIntakeItem(
     BuildContext context,
     IntakeEntity intakeEntity,
     bool usesImperialUnits,
@@ -528,7 +536,7 @@ class _DiaryPageState extends State<DiaryPage> with WidgetsBindingObserver {
     }
   }
 
-  void _onEditActivityItem(
+  Future<void> _onEditActivityItem(
     BuildContext context,
     UserActivityEntity activityEntity,
   ) async {

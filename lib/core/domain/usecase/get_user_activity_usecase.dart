@@ -40,4 +40,8 @@ class GetUserActivityUsecase {
   Future<List<UserActivityEntity>> getRecentUserActivity() {
     return _userActivityRepository.getRecentUserActivity();
   }
+
+  Future<UserActivityEntity?> getUserActivityById(String id) {
+    return _userActivityRepository.getUserActivityById(id);
+  }
 }

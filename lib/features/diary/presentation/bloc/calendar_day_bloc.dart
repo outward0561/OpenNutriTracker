@@ -258,18 +258,22 @@ class CalendarDayBloc extends Bloc<CalendarDayEvent, CalendarDayState> {
     day = _dateLabel(day);
     // The entry and its goal together (#1317).
     await withTrackedDayLockOnProfile(() async {
-      await _deleteUserActivityUsecase.deleteUserActivity(activityEntity);
+      final stored = await _getUserActivityUsecase.getUserActivityById(
+        activityEntity.id,
+      );
+      if (stored == null) return;
+      await _deleteUserActivityUsecase.deleteUserActivity(stored);
       await _addTrackedDayUsecase.reduceDayCalorieGoal(
         day,
-        activityEntity.burnedKcal,
+        stored.burnedKcal,
       );
 
       final carbsAmount = MacroCalc.getTotalCarbsGoal(
-        activityEntity.burnedKcal,
+        stored.burnedKcal,
       );
-      final fatAmount = MacroCalc.getTotalFatsGoal(activityEntity.burnedKcal);
+      final fatAmount = MacroCalc.getTotalFatsGoal(stored.burnedKcal);
       final proteinAmount = MacroCalc.getTotalProteinsGoal(
-        activityEntity.burnedKcal,
+        stored.burnedKcal,
       );
 
       await _addTrackedDayUsecase.reduceDayMacroGoals(

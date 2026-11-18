@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:get_it/get_it.dart';
 import 'package:hive_ce/hive.dart';
 import 'package:opennutritracker/core/data/data_source/config_data_source.dart';
 import 'package:opennutritracker/core/data/data_source/intake_data_source.dart';
@@ -19,6 +20,7 @@ import 'package:opennutritracker/core/data/repository/tracked_day_repository.dar
 import 'package:opennutritracker/core/data/repository/user_activity_repository.dart';
 import 'package:opennutritracker/core/domain/entity/intake_entity.dart';
 import 'package:opennutritracker/core/domain/entity/intake_type_entity.dart';
+import 'package:opennutritracker/core/domain/entity/user_activity_entity.dart';
 import 'package:opennutritracker/core/domain/usecase/add_config_usecase.dart';
 import 'package:opennutritracker/core/domain/usecase/add_tracked_day_usecase.dart';
 import 'package:opennutritracker/core/domain/usecase/delete_intake_usecase.dart';
@@ -29,10 +31,13 @@ import 'package:opennutritracker/core/domain/usecase/get_tracked_day_usecase.dar
 import 'package:opennutritracker/core/domain/usecase/get_user_activity_usecase.dart';
 import 'package:opennutritracker/core/domain/usecase/update_intake_usecase.dart';
 import 'package:opennutritracker/core/domain/usecase/update_user_activity_usecase.dart';
+import 'package:opennutritracker/core/utils/calc/macro_calc.dart';
 import 'package:opennutritracker/features/add_meal/domain/entity/meal_entity.dart';
 import 'package:opennutritracker/features/add_meal/domain/entity/meal_nutriments_entity.dart';
 import 'package:opennutritracker/features/diary/presentation/bloc/calendar_day_bloc.dart';
+import 'package:opennutritracker/features/diary/presentation/bloc/diary_bloc.dart';
 
+import '../../../../fixture/physical_activity_entity_fixtures.dart';
 import '../../../../helpers/fake_hive_db_provider.dart';
 import '../../../../helpers/hive_test_setup.dart';
 
@@ -48,6 +53,16 @@ class _FakeUpdateIntake extends Fake implements UpdateIntakeUsecase {}
 class _FakeUpdateActivity extends Fake implements UpdateUserActivityUsecase {}
 
 class _FakeContext extends Fake implements BuildContext {}
+
+class _NoopDiaryBloc extends Fake implements DiaryBloc {
+  @override
+  void add(DiaryEvent event) {}
+}
+
+class _NoopCalendarDayBloc extends Fake implements CalendarDayBloc {
+  @override
+  void add(CalendarDayEvent event) {}
+}
 
 /// 200 kcal per 100 g.
 final _meal = MealEntity(
@@ -90,6 +105,7 @@ void main() {
   late Box<TrackedDayDBO> trackedDayBox;
   late CalendarDayBloc bloc;
   late IntakeEntity toast;
+  late UserActivityRepository activityRepository;
 
   // What the Diary selected when opened at 02:30 on the 5th.
   final selectedAt0230 = DateTime(2026, 10, 5, 2, 30);
@@ -125,7 +141,7 @@ void main() {
     await configDataSource.setConfigDayStartOffset(4, 0);
 
     final intakeRepository = IntakeRepository(IntakeDataSource(db));
-    final activityRepository = UserActivityRepository(
+    activityRepository = UserActivityRepository(
       UserActivityDataSource(db),
     );
     final configRepository = ConfigRepository(configDataSource);
@@ -197,5 +213,37 @@ void main() {
     expect(day.carbsTracked, 0);
     expect(day.fatTracked, 0);
     expect(day.proteinTracked, 0);
+  });
+
+  test('a repeated activity delete reduces goals only once', () async {
+    final locator = GetIt.instance;
+    locator.registerSingleton<DiaryBloc>(_NoopDiaryBloc());
+    locator.registerSingleton<CalendarDayBloc>(_NoopCalendarDayBloc());
+    addTearDown(() async {
+      await locator.unregister<DiaryBloc>();
+      await locator.unregister<CalendarDayBloc>();
+    });
+    final activity = UserActivityEntity(
+      'ride',
+      30,
+      150,
+      DateTime(2026, 10, 5, 12),
+      PhysicalActivityFixtures.moderateBicycling,
+    );
+    await activityRepository.addUserActivity(activity);
+
+    await Future.wait([
+      bloc.deleteUserActivityItem(_FakeContext(), activity, selectedAt0230),
+      bloc.deleteUserActivityItem(_FakeContext(), activity, selectedAt0230),
+    ]);
+
+    final day = trackedDayBox.get('2026-10-05')!;
+    expect(day.calorieGoal, 1850);
+    expect(day.carbsGoal, closeTo(250 - MacroCalc.getTotalCarbsGoal(150), 1e-9));
+    expect(day.fatGoal, closeTo(70 - MacroCalc.getTotalFatsGoal(150), 1e-9));
+    expect(
+      day.proteinGoal,
+      closeTo(100 - MacroCalc.getTotalProteinsGoal(150), 1e-9),
+    );
   });
 }
