@@ -43,6 +43,8 @@ jobs:
         run: >-
           flutter test
           test/unit_test/nutrition_import_parser_test.dart
+          test/unit_test/nutrition_import_ambiguous_cells_test.dart
+          test/unit_test/nutrition_import_safety_test.dart
           test/features/add_meal/presentation/add_meal_screen_recent_search_test.dart
           test/features/diary/presentation/diary_transfer_guard_test.dart
           test/features/diary/presentation/bloc/calendar_day_bloc_label_test.dart
