@@ -46,4 +46,27 @@ void main() {
     expect(guard.isRunning, isFalse);
     guard.dispose();
   });
+
+  test('moves stay blocked until all pending deletes finish', () async {
+    final guard = DiaryTransferGuard();
+    final first = Completer<void>();
+    final second = Completer<void>();
+    final firstDelete = guard.runDelete(() => first.future);
+    final secondDelete = guard.runDelete(() => second.future);
+    first.complete();
+    await firstDelete;
+    var moved = false;
+    await guard.run(() async {
+      moved = true;
+    });
+    expect(moved, isFalse);
+    expect(guard.isRunning, isTrue);
+    second.complete();
+    await secondDelete;
+    await guard.run(() async {
+      moved = true;
+    });
+    expect(moved, isTrue);
+    guard.dispose();
+  });
 }

@@ -171,12 +171,13 @@ class _DiaryPageState extends State<DiaryPage> with WidgetsBindingObserver {
                     lunchIntake: state.lunchIntakeList,
                     dinnerIntake: state.dinnerIntakeList,
                     snackIntake: state.snackIntakeList,
-                    onDeleteIntake: (intake, day) => _runTransfer(
+                    onDeleteIntake: (intake, day) => _transferGuard.runDelete(
                       () => _onDeleteIntakeItem(intake, day),
                     ),
-                    onDeleteActivity: (activity, day) => _runTransfer(
-                      () => _onDeleteActivityItem(activity, day),
-                    ),
+                    onDeleteActivity: (activity, day) =>
+                        _transferGuard.runDelete(
+                          () => _onDeleteActivityItem(activity, day),
+                        ),
                     onCopyIntake: _onCopyIntakeItem,
                     onCopyActivity: _onCopyActivityItem,
                     onTransferIntake: (intake) =>
@@ -236,7 +237,10 @@ class _DiaryPageState extends State<DiaryPage> with WidgetsBindingObserver {
     }
   }
 
-  Future<void> _onDeleteIntakeItem(IntakeEntity intakeEntity, DateTime day) async {
+  Future<void> _onDeleteIntakeItem(
+    IntakeEntity intakeEntity,
+    DateTime day,
+  ) async {
     // The day the entry was listed under when it was long-pressed, not
     // `trackedDayEntity?.day ?? DateTime.now()`: on a past day with no
     // tracked-day row that fallback debited today's row for an entry of

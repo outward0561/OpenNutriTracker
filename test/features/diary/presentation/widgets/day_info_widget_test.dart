@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get_it/get_it.dart';
@@ -11,6 +13,7 @@ import 'package:opennutritracker/core/utils/energy_unit_provider.dart';
 import 'package:opennutritracker/features/add_meal/domain/entity/meal_entity.dart';
 import 'package:opennutritracker/features/add_meal/domain/entity/meal_nutriments_entity.dart';
 import 'package:opennutritracker/features/diary/presentation/widgets/day_info_widget.dart';
+import 'package:opennutritracker/features/diary/presentation/diary_transfer_guard.dart';
 import 'package:opennutritracker/features/home/presentation/bloc/home_bloc.dart';
 import 'package:opennutritracker/features/meal_detail/presentation/bloc/meal_detail_bloc.dart';
 import 'package:opennutritracker/generated/l10n.dart';
@@ -225,6 +228,40 @@ void main() {
     expect(button.onPressed, isNull);
     await tester.tap(find.text(l10nEn.diaryCopyMoveDayLabel));
     expect(transferCount, 0);
+  });
+
+  testWidgets('delete all forwards every food while the first delete waits', (
+    tester,
+  ) async {
+    final guard = DiaryTransferGuard();
+    final allowDelete = Completer<void>();
+    final deleted = <String>[];
+    await _pumpOmadDay(
+      tester,
+      breakfastIntake: [
+        _intake(IntakeTypeEntity.breakfast, 'Porridge'),
+        _intake(IntakeTypeEntity.breakfast, 'Toast'),
+      ],
+      onDeleteIntake: (intake, _) {
+        guard.runDelete(() async {
+          await allowDelete.future;
+          deleted.add(intake.id);
+        });
+      },
+    );
+    await tester.tap(find.bySemanticsIdentifier('intake-section-menu').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(l10nEn.deleteAllLabel));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(l10nEn.dialogOKLabel));
+    await tester.pump();
+
+    expect(guard.isRunning, isTrue);
+    allowDelete.complete();
+    await tester.pump();
+    expect(deleted, ['intake-Porridge', 'intake-Toast']);
+    expect(guard.isRunning, isFalse);
+    guard.dispose();
   });
 
   testWidgets('each food has a visible transfer action', (tester) async {
