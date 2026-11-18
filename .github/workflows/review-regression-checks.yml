@@ -1,0 +1,49 @@
+name: Nutrition review regression checks
+
+on:
+  push:
+    branches:
+      - ci/nutrition-review-regressions-20261118
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - name: Read Flutter version
+        id: flutter_version
+        run: echo "version=$(jq -r '.flutter' .fvmrc)" >> "$GITHUB_OUTPUT"
+      - name: Set up Flutter
+        uses: ./.github/actions/setup-flutter-cache
+        with:
+          flutter-version: ${{ steps.flutter_version.outputs.version }}
+      - name: Install Just
+        uses: taiki-e/install-action@just
+      - name: Create test environment
+        uses: ./.github/actions/write-env-file
+        with:
+          sentry_dns: https://stub@sentry.io/0
+          supabase_project_url: https://stub.supabase.co
+          supabase_project_anon_key: ci-stub
+      - name: Install dependencies
+        run: flutter pub get
+      - name: Generate and validate localizations
+        run: just check_l10n
+      - name: Generate Dart sources
+        run: dart run build_runner build --delete-conflicting-outputs
+      - name: Analyze
+        run: flutter analyze
+      - name: Test import and diary regressions
+        run: >-
+          flutter test
+          test/unit_test/nutrition_import_parser_test.dart
+          test/features/edit_meal/presentation/nutrition_import_dialog_test.dart
+          test/features/edit_meal/presentation/nutrition_import_basis_regression_test.dart
+          test/features/diary/presentation/widgets/diary_transfer_dialog_test.dart
+          test/features/diary/presentation/widgets/diary_table_calendar_test.dart
+      - name: Run full test suite
+        run: flutter test
