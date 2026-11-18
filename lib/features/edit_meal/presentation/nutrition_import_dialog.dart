@@ -448,6 +448,16 @@ class _NutritionImportDialogState extends State<NutritionImportDialog> {
               Expanded(
                 child: ListView(
                   children: [
+                    if (_errors.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      for (final error in _errors)
+                        Text(
+                          error,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
+                        ),
+                    ],
                     Semantics(
                       identifier: 'nutrition-paste-text',
                       child: TextField(
@@ -557,16 +567,6 @@ class _NutritionImportDialogState extends State<NutritionImportDialog> {
                           ),
                           ),
                       ],
-                    if (_errors.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      for (final error in _errors)
-                        Text(
-                          error,
-                          style: TextStyle(
-                            color: Theme.of(context).colorScheme.error,
-                          ),
-                        ),
-                    ],
                     if (_entries.isNotEmpty) ...[
                       const Divider(),
                       if (_entries.length > 1)
