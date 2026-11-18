@@ -47,6 +47,7 @@ jobs:
           test/unit_test/nutrition_import_safety_test.dart
           test/features/add_meal/presentation/add_meal_screen_recent_search_test.dart
           test/features/diary/presentation/diary_transfer_guard_test.dart
+          test/features/diary/presentation/diary_transfer_progress_test.dart
           test/features/diary/presentation/bloc/calendar_day_bloc_label_test.dart
           test/features/diary/presentation/widgets/day_info_widget_test.dart
           test/features/edit_meal/presentation/nutrition_import_dialog_test.dart
